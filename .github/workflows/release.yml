@@ -1,0 +1,61 @@
+name: Release
+
+# Pushing a tag like v2.1.0 builds a signed APK and publishes a GitHub Release with it.
+# The release notes come from that version's section in CHANGELOG.md, and they're what
+# the app shows in its update dialog.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Read version
+        run: echo "VERSION=$(grep '^versionName=' version.properties | cut -d= -f2 | tr -d '[:space:]')" >> "$GITHUB_ENV"
+
+      - name: Tag must match version.properties
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match versionName=$VERSION in version.properties"; exit 1
+          fi
+
+      - name: Restore signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.LUMEN_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.LUMEN_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::error::Missing LUMEN_KEYSTORE_B64 / LUMEN_KEYSTORE_PASSWORD secrets. Run scripts/github-setup.ps1 (see BUILDING.md)."; exit 1
+          fi
+          mkdir -p signing
+          echo "$KEYSTORE_B64" | base64 -d > signing/lumen-tv.jks
+          printf 'storeFile=lumen-tv.jks\nstorePassword=%s\nkeyAlias=lumentv\nkeyPassword=%s\n' "$KEYSTORE_PASSWORD" "$KEYSTORE_PASSWORD" > signing/keystore.properties
+
+      - name: Build release APK
+        run: chmod +x gradlew && ./gradlew assembleRelease --stacktrace
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          awk -v v="$VERSION" '/^## /{p=($2==v||$2=="v"v||$2=="["v"]"); next} p' CHANGELOG.md > notes.md
+          grep -q '[^[:space:]]' notes.md || echo "Lumen TV $VERSION" > notes.md
+          cat notes.md
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" "app/build/outputs/apk/release/LumenTV-$VERSION.apk" \
+            --title "Lumen TV $VERSION" --notes-file notes.md

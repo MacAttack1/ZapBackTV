@@ -1,0 +1,12 @@
+<resources>
+    <color name="ink">#FF07060E</color>
+    <color name="ic_launcher_background">#FF070912</color>
+    <style name="Theme.Lumen" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/ink</item>
+        <item name="android:colorBackground">@color/ink</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/ink</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:colorAccent">#FFFF6A9A</item>
+    </style>
+</resources>
