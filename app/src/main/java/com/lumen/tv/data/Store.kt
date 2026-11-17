@@ -11,7 +11,10 @@ data class Settings(
     val bufferSeconds: Int = 15,
     val autoplayNext: Boolean = true,
     val aspect: Int = 0,                    // 0 fit, 1 zoom/crop, 2 stretch
-    val accent: Int = 0,
+    val theme: String = "zap",
+    val background: String = "glow",               // a pattern id, "file:<path>" or "url:<link>"
+    val backgroundDim: Int = 35,                    // percent of the theme color laid over the background
+    val backgroundBlur: Boolean = false,
     val epgShiftHours: Int = 0,
     val showNumbers: Boolean = true,
     val previewOnFocus: Boolean = true,
@@ -34,7 +37,7 @@ data class Settings(
 
     fun toJson() = JSONObject().apply {
         put("liveFormat", liveFormat); put("bufferSeconds", bufferSeconds); put("autoplayNext", autoplayNext)
-        put("aspect", aspect); put("accent", accent); put("epgShiftHours", epgShiftHours)
+        put("aspect", aspect); put("theme", theme); put("background", background); put("backgroundDim", backgroundDim); put("backgroundBlur", backgroundBlur); put("epgShiftHours", epgShiftHours)
         put("showNumbers", showNumbers); put("previewOnFocus", previewOnFocus); put("pin", pin)
         put("hiddenCategories", JSONArray(hiddenCategories.toList())); put("defaultUserAgent", defaultUserAgent)
         put("reduceMotion", reduceMotion)
@@ -55,7 +58,10 @@ data class Settings(
             bufferSeconds = o.optInt("bufferSeconds", 15),
             autoplayNext = o.optBoolean("autoplayNext", true),
             aspect = o.optInt("aspect", 0),
-            accent = o.optInt("accent", 0),
+            theme = o.optString("theme", "zap"),
+            background = o.optString("background", "glow"),
+            backgroundDim = o.optInt("backgroundDim", 35),
+            backgroundBlur = o.optBoolean("backgroundBlur", false),
             epgShiftHours = o.optInt("epgShiftHours", 0),
             showNumbers = o.optBoolean("showNumbers", true),
             previewOnFocus = o.optBoolean("previewOnFocus", true),

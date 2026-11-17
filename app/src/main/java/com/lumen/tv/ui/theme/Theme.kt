@@ -5,9 +5,14 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -16,45 +21,84 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.lumen.tv.R
 
-// --------------------------------------------------------------------- palette
-// Night-sky neutrals with a violet cast, so the accent gradient reads as light.
+// --------------------------------------------------------------------- themes
+// A theme colors everything: the background, the panels, the bars and the accent. Backgrounds are
+// saturated (deep purple, ocean blue, cherry red…) rather than near-black, and accents are bold flat
+// colors. Text stays white, so every theme keeps a dark-enough base for it to read.
 
-object Hue {
-    val Ink = Color(0xFF07060E)       // app background
-    val Night = Color(0xFF0A0C15)     // rails, sheets, bars
-    val Surface1 = Color(0xFF10131F)
-    val Surface2 = Color(0xFF181C2B)
-    val Surface3 = Color(0xFF23283B)
-    val Stroke = Color(0x1FFFFFFF)    // hairline borders
-    val Glass = Color(0x0FFFFFFF)     // translucent panel fill
-    val GlassHi = Color(0x1AFFFFFF)
-    val TextHi = Color(0xFFF4F6FF)
-    val TextMid = Color(0xFFA8B0CC)
-    val TextLo = Color(0xFF6B7391)
-    val Live = Color(0xFFFF4D6A)
-    val Gold = Color(0xFFFFC857)
-    val Success = Color(0xFF3DDC97)
-    val OnAccent = Color(0xFF070912)  // text/icons on top of the accent gradient
+/** One full color theme. Panels and text tints are worked out from [ink] so they always match. */
+class AppTheme(
+    val id: String,
+    val name: String,
+    val ink: Color,            // the app background
+    val night: Color,          // rails, bars and sheets
+    val main: Color,           // buttons, selection, focus
+    val second: Color,         // highlights, the second color in patterns
+    val gradient: Boolean = false, // accent as a two-color gradient (the classic look) instead of flat
+) {
+    val surface1: Color = mix(ink, main, 0.06f, 0.05f)
+    val surface2: Color = mix(ink, main, 0.10f, 0.10f)
+    val surface3: Color = mix(ink, main, 0.14f, 0.16f)
+    val textMid: Color = lerp(ink, Color.White, 0.76f)
+    val textLo: Color = lerp(ink, Color.White, 0.54f)
+    val onAccent: Color = lerp(ink, Color.Black, 0.7f)
+    val accent = Accent(name, main, second, gradient)
+
+    private companion object {
+        fun mix(base: Color, tint: Color, t: Float, light: Float) = lerp(lerp(base, tint, t), Color.White, light)
+    }
 }
 
-data class Accent(val name: String, val main: Color, val second: Color) {
-    /** The signature gradient: buttons, selected chips, focus rings, progress. */
-    val brush: Brush get() = Brush.linearGradient(listOf(main, second))
-    val soft: Color get() = main.copy(alpha = 0.16f)
-}
-
-val Accents = listOf(
-    Accent("Zap", Color(0xFFFF3DA0), Color(0xFFFFB21E)),     // the logo's magenta and orange
-    Accent("Dawn", Color(0xFFFF6A9A), Color(0xFFFFB06B)),
-    Accent("Aurora", Color(0xFF9B8CFF), Color(0xFF22D3EE)),
-    Accent("Ember", Color(0xFFFF7A45), Color(0xFFFFB55C)),
-    Accent("Nova", Color(0xFFFF5CA8), Color(0xFFFF9D6C)),
-    Accent("Lagoon", Color(0xFF22C7D9), Color(0xFF4ADEAA)),
-    Accent("Lime", Color(0xFFA3E35D), Color(0xFF4ADE80)),
-    Accent("Gold", Color(0xFFFFC45C), Color(0xFFFFE08A)),
+val Themes = listOf(
+    AppTheme("zap", "ZapBack", Color(0xFF2B0B63), Color(0xFF1F0749), Color(0xFFFF2E97), Color(0xFFFFE11A)),
+    AppTheme("arcade", "Neon Arcade", Color(0xFF0A0A24), Color(0xFF050514), Color(0xFF00F0FF), Color(0xFFFF2BD6)),
+    AppTheme("electric", "Electric", Color(0xFF0D1A9C), Color(0xFF0A1378), Color(0xFF00E5FF), Color(0xFFFF3D81)),
+    AppTheme("ocean", "Ocean Pop", Color(0xFF00386F), Color(0xFF002A55), Color(0xFFFFD60A), Color(0xFF00E5C3)),
+    AppTheme("toxic", "Toxic", Color(0xFF07301A), Color(0xFF042211), Color(0xFFC6FF00), Color(0xFF00FFA3)),
+    AppTheme("lava", "Lava", Color(0xFF4F0814), Color(0xFF3A050E), Color(0xFFFF8A00), Color(0xFFFFDD00)),
+    AppTheme("sunset", "Sunset Pop", Color(0xFF5C0B3A), Color(0xFF45072B), Color(0xFFFFC300), Color(0xFFFF5A5F)),
+    AppTheme("grape", "Grape Soda", Color(0xFF420C6B), Color(0xFF310851), Color(0xFFFF9100), Color(0xFFFF3DA0)),
+    AppTheme("bubblegum", "Bubblegum", Color(0xFF6B1260), Color(0xFF520C49), Color(0xFF7DF9FF), Color(0xFFFFF05A)),
+    AppTheme("midnight", "Midnight", Color(0xFF07060E), Color(0xFF0A0C15), Color(0xFFFF3DA0), Color(0xFFFFB21E), gradient = true),
 )
 
-val LocalAccent = staticCompositionLocalOf { Accents[0] }
+fun themeById(id: String): AppTheme = Themes.firstOrNull { it.id == id } ?: Themes[0]
+
+/**
+ * The live palette. Every color reads from the current theme, so switching themes repaints the
+ * whole app at once (each read is tracked by Compose).
+ */
+object Hue {
+    var theme: AppTheme by mutableStateOf(Themes[0])
+
+    val Ink: Color get() = theme.ink
+    val Night: Color get() = theme.night
+    val Surface1: Color get() = theme.surface1
+    val Surface2: Color get() = theme.surface2
+    val Surface3: Color get() = theme.surface3
+    val Stroke = Color(0x29FFFFFF)    // hairline borders
+    val Glass = Color(0x14FFFFFF)     // translucent panel fill
+    val GlassHi = Color(0x24FFFFFF)
+    val TextHi = Color(0xFFFFFFFF)
+    val TextMid: Color get() = theme.textMid
+    val TextLo: Color get() = theme.textLo
+    val Live = Color(0xFFFF3B5C)
+    val Gold = Color(0xFFFFC857)
+    val Success = Color(0xFF3DDC97)
+    val OnAccent: Color get() = theme.onAccent  // text/icons on top of the accent
+}
+
+class Accent(val name: String, val main: Color, val second: Color, val gradient: Boolean = false) {
+    /** Buttons, selected chips, focus rings, progress: a flat bold color, or the classic two-color gradient. */
+    val brush: Brush = if (gradient) Brush.linearGradient(listOf(main, second)) else SolidColor(main)
+    val soft: Color get() = main.copy(alpha = 0.2f)
+}
+
+/** What's drawn behind the app: a built-in pattern, a photo, or a picture from a link. */
+data class Backdrop(val value: String = "glow", val dim: Int = 35, val blur: Boolean = false)
+
+val LocalAccent = staticCompositionLocalOf { Themes[0].accent }
+val LocalBackdrop = staticCompositionLocalOf { Backdrop() }
 val LocalIsTv = staticCompositionLocalOf { false }
 
 // ------------------------------------------------------------------ typography
@@ -89,8 +133,8 @@ private fun typography(scale: Float) = Typography(
 )
 
 @Composable
-fun LumenTheme(accentIndex: Int, isTv: Boolean, content: @Composable () -> Unit) {
-    val accent = Accents.getOrElse(accentIndex) { Accents[0] }
+fun LumenTheme(backdrop: Backdrop, isTv: Boolean, content: @Composable () -> Unit) {
+    val accent = Hue.theme.accent
     val scheme = darkColorScheme(
         primary = accent.main,
         onPrimary = Hue.OnAccent,
@@ -108,7 +152,7 @@ fun LumenTheme(accentIndex: Int, isTv: Boolean, content: @Composable () -> Unit)
         outlineVariant = Hue.Stroke,
         error = Hue.Live,
     )
-    CompositionLocalProvider(LocalAccent provides accent, LocalIsTv provides isTv) {
+    CompositionLocalProvider(LocalAccent provides accent, LocalBackdrop provides backdrop, LocalIsTv provides isTv) {
         // TV UIs are viewed from ~3m away; Compose dp already scales with density, so only nudge type.
         MaterialTheme(colorScheme = scheme, typography = typography(if (isTv) 0.95f else 1f), content = content)
     }

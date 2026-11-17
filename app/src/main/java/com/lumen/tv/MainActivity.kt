@@ -12,12 +12,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lumen.tv.ui.AppViewModel
 import com.lumen.tv.ui.LumenRoot
 import com.lumen.tv.ui.Screen
+import com.lumen.tv.ui.theme.Backdrop
+import com.lumen.tv.ui.theme.Hue
 import com.lumen.tv.ui.theme.LumenTheme
+import com.lumen.tv.ui.theme.themeById
 
 class MainActivity : ComponentActivity() {
     private val vm: AppViewModel by viewModels()
@@ -32,9 +36,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         handleIntent(intent)
+        Hue.theme = themeById(vm.store.settings.value.theme)
         setContent {
             val settings by vm.store.settings.collectAsStateWithLifecycle()
-            LumenTheme(accentIndex = settings.accent, isTv = isTv) {
+            // Theme switches apply live: every color in the app reads from Hue.theme.
+            LaunchedEffect(settings.theme) { Hue.theme = themeById(settings.theme) }
+            val backdrop = Backdrop(settings.background, settings.backgroundDim, settings.backgroundBlur)
+            LumenTheme(backdrop = backdrop, isTv = isTv) {
                 LumenRoot(vm = vm, onExit = { finish() })
             }
         }

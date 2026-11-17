@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 sealed interface Screen {
     val route: String
@@ -229,6 +230,36 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             store.setActive(source.id)
             repo.load(source, force = true)
             onDone()
+        }
+    }
+
+    // ------------------------------------------------------------ background picture
+
+    /** Copies a picked photo into the app's own storage (the picker's permission doesn't last) and uses it. */
+    fun setBackgroundPhoto(uri: Uri) {
+        val ctx = getApplication<Application>()
+        viewModelScope.launch {
+            val path = withContext(Dispatchers.IO) {
+                runCatching {
+                    val dir = java.io.File(ctx.filesDir, "backgrounds").apply { mkdirs() }
+                    // A new name each time, so the image cache never shows the old picture.
+                    val file = java.io.File(dir, "bg-${System.currentTimeMillis()}.img")
+                    ctx.contentResolver.openInputStream(uri)!!.use { input -> file.outputStream().use { input.copyTo(it) } }
+                    dir.listFiles()?.filter { it != file }?.forEach { it.delete() }
+                    file.absolutePath
+                }.getOrNull()
+            }
+            if (path == null) toast = "Couldn't open that picture" else {
+                store.updateSettings { it.copy(background = "file:$path") }
+                toast = "Background updated"
+            }
+        }
+    }
+
+    fun setBackground(value: String) {
+        store.updateSettings { it.copy(background = value) }
+        if (!value.startsWith("file:")) viewModelScope.launch(Dispatchers.IO) {
+            java.io.File(getApplication<Application>().filesDir, "backgrounds").listFiles()?.forEach { it.delete() }
         }
     }
 

@@ -142,21 +142,6 @@ fun Modifier.gradientTint(brush: Brush): Modifier = this
     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
     .drawWithContent { drawContent(); drawRect(brush, blendMode = BlendMode.SrcAtop) }
 
-/** Two soft washes of the accent colors behind the whole app. */
-@Composable
-fun AmbientBackground(modifier: Modifier = Modifier) {
-    val accent = LocalAccent.current
-    Box(
-        modifier.fillMaxSize().background(Hue.Ink).drawBehind {
-            val r = size.maxDimension * 0.7f
-            val a = Offset(size.width * 0.08f, -size.height * 0.12f)
-            drawCircle(Brush.radialGradient(listOf(accent.main.copy(alpha = 0.17f), Color.Transparent), center = a, radius = r), radius = r, center = a)
-            val b = Offset(size.width * 1.02f, size.height * 1.05f)
-            drawCircle(Brush.radialGradient(listOf(accent.second.copy(alpha = 0.10f), Color.Transparent), center = b, radius = r), radius = r, center = b)
-        }
-    )
-}
-
 // ------------------------------------------------------------------ brand
 
 /** The ZapBackTV mark (chunky CRT + remote). Same artwork as the launcher icon. */

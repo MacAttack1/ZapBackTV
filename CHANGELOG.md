@@ -2,6 +2,13 @@
 
 Each `## version` section becomes the release notes on GitHub and the "What's new" text in the app's update dialog.
 
+## 2.3.0
+
+- **10 vibrant themes** that color the whole app, not just the buttons: ZapBack, Neon Arcade, Electric, Ocean Pop, Toxic, Lava, Sunset Pop, Grape Soda, Bubblegum, and Midnight (the old dark look). Bold flat colors instead of muted gradients, and switching applies instantly
+- **Backgrounds**: pick a pattern drawn in your theme's colors (Glow, Starburst, Synthwave, Halftone, Waves, Bubbles, Confetti, Stripes, Solid), a photo from your device, or a picture from a link, with a color wash and optional blur
+- **Reorganized Settings**: categories with their own pages (Appearance, Playlists, What you see, Playback, TV guide, Parental controls, Updates, History & storage, About). Side-by-side on TV and tablets, tap-through on phones
+- Real on/off switches, and options shown side by side instead of cycling through them
+
 ## 2.2.1
 
 - **Back from the player returns to where you were**: the guide, channel list or search, with the same spot and the channel you picked still selected
