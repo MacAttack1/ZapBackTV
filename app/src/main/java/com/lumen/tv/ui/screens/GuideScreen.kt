@@ -157,9 +157,15 @@ fun GuideScreen(vm: AppViewModel) {
                     TimeRuler(viewStart, viewEnd, dpPerMin, Modifier.weight(1f).fillMaxHeight().padding(end = pad))
                 }
                 val listState = rememberLazyListState()
+                // Remembered across playback: which list this is and which channel you opened.
+                var shownKey by rememberSaveable { mutableStateOf<String?>(null) }
+                var openedKey by rememberSaveable { mutableStateOf<String?>(null) }
+                val targetKey = openedKey?.takeIf { k -> channels.any { it.listKey == k } } ?: channels.firstOrNull()?.listKey
                 val firstFocus = remember { FocusRequester() }
                 LaunchedEffect(catId) {
-                    listState.scrollToItem(0)
+                    // Back to the top only for a new category, not when returning from the player.
+                    if (shownKey != null && shownKey != catId) { openedKey = null; listState.scrollToItem(0) }
+                    shownKey = catId
                     if (isTv) { delay(150); runCatching { firstFocus.requestFocus() } }
                 }
                 Box(Modifier.fillMaxSize()) {
@@ -174,12 +180,13 @@ fun GuideScreen(vm: AppViewModel) {
                         contentPadding = PaddingValues(bottom = 40.dp),
                     ) {
                         items(channels, key = { it.listKey }) { ch ->
-                            val isFirst = ch.listKey == channels.firstOrNull()?.listKey
+                            val isTarget = ch.listKey == targetKey
                             GuideRow(
                                 vm = vm, channel = ch, channels = channels, epg = epg, now = now,
                                 viewStart = viewStart, viewEnd = viewEnd, dpPerMin = dpPerMin,
                                 channelCol = channelCol, rowHeight = rowHeight, pad = pad,
-                                focusRequester = if (isFirst) firstFocus else null,
+                                focusRequester = if (isTarget) firstFocus else null,
+                                onOpened = { openedKey = ch.listKey },
                                 onReveal = { startMs ->
                                     offsetMin = clamp(((startMs - windowStart) / MIN).toFloat())
                                 },
@@ -238,6 +245,7 @@ private fun GuideRow(
     rowHeight: Dp,
     pad: Dp,
     focusRequester: FocusRequester?,
+    onOpened: () -> Unit,
     onReveal: (Long) -> Unit,
 ) {
     val isTv = LocalIsTv.current
@@ -253,7 +261,7 @@ private fun GuideRow(
                 .focusGlow(RoundedCornerShape(10.dp), scale = 1.03f, ring = 2.dp)
                 .clip(RoundedCornerShape(10.dp))
                 .background(Hue.Surface1)
-                .clickable { vm.playChannel(channel, channels) }
+                .clickable { onOpened(); vm.playChannel(channel, channels) }
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -274,7 +282,7 @@ private fun GuideRow(
                     .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
                     .focusGlow(RoundedCornerShape(10.dp), scale = 1f, ring = 2.dp)
                     .clip(RoundedCornerShape(10.dp)).background(Hue.Surface1.copy(alpha = 0.6f))
-                    .clickable { vm.playChannel(channel, channels) }
+                    .clickable { onOpened(); vm.playChannel(channel, channels) }
                     .padding(horizontal = 14.dp),
                 contentAlignment = Alignment.CenterStart,
             ) { Text("No information", style = MaterialTheme.typography.bodyMedium, color = Hue.TextLo) }
@@ -295,7 +303,7 @@ private fun GuideRow(
                                     else onReveal(maxOf(p.start, p.end - span / 2))
                                 }
                             },
-                            onClick = { openProgramme(vm, channel, channels, p, now) },
+                            onClick = { onOpened(); openProgramme(vm, channel, channels, p, now) },
                         )
                     }
                 },

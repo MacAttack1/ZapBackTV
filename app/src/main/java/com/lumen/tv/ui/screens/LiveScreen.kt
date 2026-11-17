@@ -197,10 +197,19 @@ private fun ChannelList(
     }
     val state = rememberLazyListState()
     val isTv = LocalIsTv.current
-    val first = remember { FocusRequester() }
-    LaunchedEffect(catKey) { state.scrollToItem(0) }
-    // Jump focus into the list only when a category is picked, not while flipping country/genre chips.
-    LaunchedEffect(focusKey) { if (isTv) { delay(120); runCatching { first.requestFocus() } } }
+    // Remembered across playback: which list this is and which channel was opened last.
+    var shownKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var openedKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val targetKey = openedKey?.takeIf { k -> channels.any { it.listKey == k } } ?: channels.first().listKey
+    val target = remember { FocusRequester() }
+    // Back to the top only when the list really changes, not when returning from the player.
+    LaunchedEffect(catKey) {
+        if (shownKey != null && shownKey != catKey) { openedKey = null; state.scrollToItem(0) }
+        shownKey = catKey
+    }
+    // Focus the channel you were on (or the first one); only when a category is picked or the
+    // screen is re-entered, not while flipping country/genre chips.
+    LaunchedEffect(focusKey) { if (isTv) { delay(150); runCatching { target.requestFocus() } } }
     LazyColumn(
         modifier.fillMaxWidth().focusRestorer(),
         state = state,
@@ -211,10 +220,10 @@ private fun ChannelList(
             ChannelListItem(
                 c, now = epg(c), selected = c.key == selectedKey, showNumber = showNumbers,
                 isFavorite = c.key in favKeys,
-                modifier = if (i == 0) Modifier.focusRequester(first) else Modifier,
+                modifier = if (c.listKey == targetKey) Modifier.focusRequester(target) else Modifier,
                 onFocus = { if (it) onFocus(c) },
                 onLongClick = { onLongClick(c) },
-            ) { onClick(c) }
+            ) { openedKey = c.listKey; onClick(c) }
         }
     }
 }

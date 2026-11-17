@@ -10,6 +10,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.lumen.tv.LumenApp
 import com.lumen.tv.data.Catalog
+import com.lumen.tv.data.SearchIndex
+import com.lumen.tv.data.SearchResults
 import com.lumen.tv.data.CategoryInfo
 import com.lumen.tv.data.ContentRules
 import com.lumen.tv.data.PickCategory
@@ -91,6 +93,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val current: Screen get() = backStack.last()
 
     var inPip by mutableStateOf(false)
+
+    // ---- search: kept here (not in the screen) so it's still there after watching something
+    var searchQuery by mutableStateOf("")
+    var searchResults by mutableStateOf<Pair<String, SearchResults>?>(null)
+    private var searchIndexFor: Library? = null
+    private var searchIndex: Map<Kind, SearchIndex>? = null
+
+    /** Builds the search index once per library and reuses it. */
+    fun searchIndexFor(lib: Library): Map<Kind, SearchIndex> {
+        searchIndex?.let { if (searchIndexFor === lib) return it }
+        return SearchIndex.forLibrary(lib).also { searchIndex = it; searchIndexFor = lib }
+    }
+
+    /** Back presses arriving right after the player closes are ignored, so a double press
+     *  (or a remote that repeats Back) doesn't skip past the screen you came from. */
+    var lastPlayerExit = 0L
+        private set
     var toast by mutableStateOf<String?>(null)
 
     val activeSource: StateFlow<Source?> = combine(store.sources, store.activeId) { list, id ->
@@ -188,6 +207,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** @return false when there's nothing left to pop (the activity should finish). */
     fun back(): Boolean {
+        if (current is Screen.Player) lastPlayerExit = android.os.SystemClock.uptimeMillis()
         if (backStack.size > 1) { backStack.removeAt(backStack.lastIndex); return true }
         return false
     }

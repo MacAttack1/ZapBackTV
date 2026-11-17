@@ -43,6 +43,7 @@ import androidx.compose.material.icons.rounded.FilterAlt
 import androidx.compose.material.icons.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Stream
@@ -278,9 +279,25 @@ fun SettingsScreen(vm: AppViewModel) {
 
         // ------------------------------------------------------------ data
         item {
-            Section("Storage", Icons.Rounded.History) {
-                ActionRow("Clear watch history", Icons.Rounded.History) { confirmClearHistory = true }
-                ActionRow("Clear cache and reload", Icons.Rounded.DeleteSweep) { vm.repo.clearCache(); vm.toast = "Cache cleared — reloading" }
+            val watched by vm.store.history.collectAsStateWithLifecycle()
+            val searched by vm.store.searches.collectAsStateWithLifecycle()
+            Section("History & storage", Icons.Rounded.History) {
+                ActionRow(
+                    "Clear watch history", Icons.Rounded.History,
+                    value = if (watched.isEmpty()) "Empty" else "${watched.size}",
+                    hint = "Continue watching, recently watched channels and resume points.",
+                ) { if (watched.isEmpty()) vm.toast = "Watch history is already empty" else confirmClearHistory = true }
+                ActionRow(
+                    "Clear search history", Icons.Rounded.Search,
+                    value = if (searched.isEmpty()) "Empty" else "${searched.size}",
+                    hint = "Recent searches shown on the Search screen.",
+                ) {
+                    if (searched.isEmpty()) vm.toast = "Search history is already empty"
+                    else { vm.store.clearSearches(); vm.searchQuery = ""; vm.searchResults = null; vm.toast = "Search history cleared" }
+                }
+                ActionRow("Clear cache and reload", Icons.Rounded.DeleteSweep, hint = "Re-downloads your playlist and TV guide.") {
+                    vm.repo.clearCache(); vm.toast = "Cache cleared — reloading"
+                }
             }
         }
 

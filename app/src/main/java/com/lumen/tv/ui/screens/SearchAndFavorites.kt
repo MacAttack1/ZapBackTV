@@ -34,6 +34,13 @@ import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lumen.tv.data.Kind
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.History
+import com.lumen.tv.data.foldForSearch
+import com.lumen.tv.data.SearchResults
 import com.lumen.tv.data.Stream
 import com.lumen.tv.ui.AppViewModel
 import com.lumen.tv.ui.Screen
@@ -49,69 +56,40 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
-import java.text.Normalizer
-
-private data class Results(val live: List<Stream>, val movies: List<Stream>, val series: List<Stream>) {
-    val isEmpty get() = live.isEmpty() && movies.isEmpty() && series.isEmpty()
-}
-
-private val marks = Regex("\\p{Mn}+")
-
-/** Lower-cases and strips accents; skips the (slow) Unicode normalizer for plain ASCII names. */
-private fun fold(s: String): String {
-    val lower = s.lowercase()
-    return if (lower.all { it.code < 128 }) lower else Normalizer.normalize(lower, Normalizer.Form.NFD).replace(marks, "")
-}
-
-/** Names pre-folded once per library so each keystroke is a quick scan. */
-private class SearchIndex(val items: List<Stream>) {
-    val names: Array<String> = Array(items.size) { fold(items[it].name) }
-
-    fun find(q: String, terms: List<String>, limit: Int, check: () -> Unit): List<Stream> {
-        val first = ArrayList<Stream>()
-        val rest = ArrayList<Stream>()
-        for (i in names.indices) {
-            if (i and 1023 == 0) check()
-            val n = names[i]
-            if (terms.all { it in n }) {
-                if (n.startsWith(q)) first += items[i] else if (rest.size < limit) rest += items[i]
-                if (first.size >= limit) break
-            }
-        }
-        return (first + rest).take(limit)
-    }
-}
 
 @Composable
 fun SearchScreen(vm: AppViewModel) {
     val lib = vm.library.collectAsStateWithLifecycle().value ?: return
     val epg by vm.repo.epg.collectAsStateWithLifecycle()
+    val recent by vm.store.searches.collectAsStateWithLifecycle()
     val isTv = LocalIsTv.current
     val pad = hPad()
-    var query by rememberSaveable { mutableStateOf("") }
-    var results by remember { mutableStateOf<Results?>(null) }
+    val query = vm.searchQuery
+    // Results for the current query, kept in the view model so coming back shows them instantly.
+    val results = vm.searchResults?.takeIf { it.first == query }?.second
     var searching by remember { mutableStateOf(false) }
-    val index by produceState<Map<Kind, SearchIndex>?>(null, lib) {
-        value = withContext(Dispatchers.Default) { Kind.entries.associateWith { SearchIndex(lib.streams(it)) } }
-    }
 
-    LaunchedEffect(query, index) {
-        val q = fold(query.trim()).replace(Regex("\\s+"), " ")
-        if (q.length < 2) { results = null; searching = false; return@LaunchedEffect }
+    LaunchedEffect(query, lib) {
+        val q = foldForSearch(query.trim()).replace(Regex("\\s+"), " ")
+        if (q.length < 2) { vm.searchResults = null; searching = false; return@LaunchedEffect }
+        if (vm.searchResults?.first == query) return@LaunchedEffect // already have them
         searching = true
         delay(200) // debounce typing
-        val idx = index ?: return@LaunchedEffect // still indexing; this effect re-runs when ready
         val terms = q.split(' ').filter { it.isNotBlank() }
-        results = withContext(Dispatchers.Default) {
+        val found = withContext(Dispatchers.Default) {
+            val idx = vm.searchIndexFor(lib)
             val check = { ensureActive() }
-            Results(
+            SearchResults(
                 idx.getValue(Kind.LIVE).find(q, terms, 60, check),
                 idx.getValue(Kind.MOVIE).find(q, terms, 60, check),
                 idx.getValue(Kind.SERIES).find(q, terms, 60, check),
             )
         }
+        vm.searchResults = query to found
         searching = false
     }
+    // Opening a result is what puts a search into the history.
+    fun opened() = vm.store.addSearch(query)
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = if (isTv) 28.dp else 8.dp, bottom = 48.dp)) {
         item {
@@ -120,7 +98,7 @@ fun SearchScreen(vm: AppViewModel) {
                     Text("Search", style = MaterialTheme.typography.headlineLarge, color = Hue.TextHi)
                     Spacer(Modifier.height(14.dp))
                 }
-                FilterField(query, { query = it }, "Channels, movies, series…", Modifier.initialFocus())
+                FilterField(query, { vm.searchQuery = it }, "Channels, movies, series…", Modifier.initialFocus(enabled = query.isEmpty()))
             }
         }
         val r = results
@@ -130,12 +108,40 @@ fun SearchScreen(vm: AppViewModel) {
                     CircularProgressIndicator(color = com.lumen.tv.ui.theme.LocalAccent.current.main)
                 }
             }
-            r == null -> item {
-                EmptyState(
-                    Icons.Rounded.Search, "Find anything",
-                    "Search across ${lib.streams(Kind.LIVE).size} channels, ${lib.streams(Kind.MOVIE).size} movies and ${lib.streams(Kind.SERIES).size} series.",
-                    Modifier.height(380.dp),
-                )
+            r == null -> {
+                if (recent.isNotEmpty()) item(key = "recent") {
+                    Column(Modifier.padding(top = 22.dp)) {
+                        Row(Modifier.fillMaxWidth().padding(horizontal = pad), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.History, null, tint = Hue.TextLo, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Recent searches", style = MaterialTheme.typography.titleMedium, color = Hue.TextHi, modifier = Modifier.weight(1f))
+                            Pill("Clear", selected = false, onClick = { vm.store.clearSearches(); vm.toast = "Search history cleared" }, icon = Icons.Rounded.DeleteSweep)
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = pad),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            items(recent, key = { it }) { q ->
+                                Pill(
+                                    q, selected = false, onClick = { vm.searchQuery = q },
+                                    onLongClick = { vm.store.removeSearch(q); vm.toast = "Removed “$q”" },
+                                )
+                            }
+                        }
+                        Text(
+                            "Hold a search to remove it.", style = MaterialTheme.typography.bodySmall, color = Hue.TextLo,
+                            modifier = Modifier.padding(horizontal = pad, vertical = 8.dp),
+                        )
+                    }
+                }
+                item {
+                    EmptyState(
+                        Icons.Rounded.Search, "Find anything",
+                        "Search across ${lib.streams(Kind.LIVE).size} channels, ${lib.streams(Kind.MOVIE).size} movies and ${lib.streams(Kind.SERIES).size} series.",
+                        Modifier.height(if (recent.isEmpty()) 380.dp else 300.dp),
+                    )
+                }
             }
             r.isEmpty -> item { EmptyState(Icons.Rounded.SearchOff, "No results", "Nothing matches “$query”.", Modifier.height(380.dp)) }
             else -> {
@@ -143,7 +149,7 @@ fun SearchScreen(vm: AppViewModel) {
                     ResultRow("Channels", r.live.size) {
                         items(r.live, key = { it.listKey }) { c ->
                             ChannelTile(c, epg.now(c), width = if (isTv) 220.dp else 180.dp, onLongClick = { vm.toggleFavorite(c) }) {
-                                vm.playChannel(c, r.live)
+                                opened(); vm.playChannel(c, r.live)
                             }
                         }
                     }
@@ -151,14 +157,14 @@ fun SearchScreen(vm: AppViewModel) {
                 if (r.movies.isNotEmpty()) item(key = "movies") {
                     ResultRow("Movies", r.movies.size) {
                         items(r.movies, key = { it.listKey }) { m ->
-                            PosterCard(m, width = 140.dp, onLongClick = { vm.toggleFavorite(m) }) { vm.navigate(Screen.MovieDetail(m)) }
+                            PosterCard(m, width = 140.dp, onLongClick = { vm.toggleFavorite(m) }) { opened(); vm.navigate(Screen.MovieDetail(m)) }
                         }
                     }
                 }
                 if (r.series.isNotEmpty()) item(key = "series") {
                     ResultRow("Series", r.series.size) {
                         items(r.series, key = { it.listKey }) { s ->
-                            PosterCard(s, width = 140.dp, onLongClick = { vm.toggleFavorite(s) }) { vm.navigate(Screen.SeriesDetail(s)) }
+                            PosterCard(s, width = 140.dp, onLongClick = { vm.toggleFavorite(s) }) { opened(); vm.navigate(Screen.SeriesDetail(s)) }
                         }
                     }
                 }

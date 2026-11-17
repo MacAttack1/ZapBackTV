@@ -340,7 +340,8 @@ fun PlayerScreen(vm: AppViewModel, initial: PlayRequest, onClose: () -> Unit) {
         when {
             panel != null -> panel = null
             upNext != null -> upNext = null
-            isTv && overlay && error == null -> overlay = false
+            // Back always leaves the player (it used to hide the controls first on TV,
+            // which made it easy to press twice and skip past the screen you came from).
             else -> onClose()
         }
     }

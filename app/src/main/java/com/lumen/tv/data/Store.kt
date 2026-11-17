@@ -126,6 +126,9 @@ class Store(context: Context) {
     private val _favorites = MutableStateFlow(sp.getStringSet("favorites", emptySet())!!.toSet())
     val favorites: StateFlow<Set<String>> = _favorites
     private val _history = MutableStateFlow(readHistory())
+    private val _searches = MutableStateFlow(readSearches())
+    /** Recent searches, newest first. */
+    val searches: StateFlow<List<String>> = _searches
     val history: StateFlow<List<WatchEntry>> = _history
 
     // ------------------------------------------------------------ sources
@@ -198,6 +201,33 @@ class Store(context: Context) {
     fun removeHistory(entry: WatchEntry) {
         _history.value = _history.value.filterNot { it.key == entry.key && it.sourceId == entry.sourceId }
         writeHistory()
+    }
+
+    // ------------------------------------------------------------ search history
+    fun addSearch(query: String) {
+        val q = query.trim().replace(Regex("\\s+"), " ")
+        if (q.length < 2) return
+        _searches.value = (listOf(q) + _searches.value.filterNot { it.equals(q, ignoreCase = true) }).take(15)
+        writeSearches()
+    }
+
+    fun removeSearch(query: String) {
+        _searches.value = _searches.value.filterNot { it == query }
+        writeSearches()
+    }
+
+    fun clearSearches() {
+        _searches.value = emptyList()
+        writeSearches()
+    }
+
+    private fun readSearches(): List<String> = runCatching {
+        val a = JSONArray(sp.getString("searchHistory", "[]"))
+        (0 until a.length()).map { a.getString(it) }
+    }.getOrDefault(emptyList())
+
+    private fun writeSearches() {
+        sp.edit().putString("searchHistory", JSONArray(_searches.value).toString()).apply()
     }
 
     fun clearHistory() {

@@ -167,10 +167,15 @@ fun PosterGrid(
     }
     val isTv = LocalIsTv.current
     val state = rememberLazyGridState()
-    val first = remember { FocusRequester() }
+    var shownKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var openedKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val targetKey = openedKey?.takeIf { k -> items.any { it.listKey == k } } ?: items.first().listKey
+    val target = remember { FocusRequester() }
     LaunchedEffect(resetKey) {
-        state.scrollToItem(0)
-        if (isTv) { delay(150); runCatching { first.requestFocus() } }
+        // Scroll to the top only for a new category/sort, not when coming back from a title.
+        if (shownKey != null && shownKey != resetKey) { openedKey = null; state.scrollToItem(0) }
+        shownKey = resetKey
+        if (isTv) { delay(150); runCatching { target.requestFocus() } }
     }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minWidth),
@@ -183,11 +188,11 @@ fun PosterGrid(
         itemsIndexed(items, key = { _, s -> s.listKey }) { i, s ->
             PosterCard(
                 s, width = null,
-                modifier = if (i == 0) Modifier.focusRequester(first) else Modifier,
+                modifier = if (s.listKey == targetKey) Modifier.focusRequester(target) else Modifier,
                 isFavorite = s.key in favKeys,
                 progress = progress[s.key],
                 onLongClick = { onLongClick(s) },
-            ) { onClick(s) }
+            ) { openedKey = s.listKey; onClick(s) }
         }
     }
 }

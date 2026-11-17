@@ -29,6 +29,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import com.lumen.tv.ui.components.Pill
+import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Star
@@ -87,6 +89,21 @@ fun HomeScreen(vm: AppViewModel) {
     val epg by vm.repo.epg.collectAsStateWithLifecycle()
     val isTv = LocalIsTv.current
     val pad = hPad()
+    var confirmClear by remember { mutableStateOf<ClearRow?>(null) }
+    confirmClear?.let { row ->
+        ConfirmDialog(
+            title = if (row == ClearRow.CONTINUE) "Clear Continue watching?" else "Clear recently watched channels?",
+            message = if (row == ClearRow.CONTINUE) "Movies and episodes you started will be removed from this row."
+            else "Channels you watched will be removed from this row and from Live TV's Recently watched list.",
+            confirm = "Clear",
+            onDismiss = { confirmClear = null },
+        ) {
+            val entries = history.filter { it.sourceId == lib.sourceId && (if (row == ClearRow.CONTINUE) it.isResumable else it.kind == Kind.LIVE) }
+            entries.forEach { vm.store.removeHistory(it) }
+            confirmClear = null
+            vm.toast = "Cleared"
+        }
+    }
 
     // Only titles that are still visible: anything hidden (adult, other countries, switched-off categories) drops out.
     val continueItems = remember(history, lib) {
@@ -133,7 +150,10 @@ fun HomeScreen(vm: AppViewModel) {
             }
         }
 
-        if (continueItems.isNotEmpty()) shelf("continue", "Continue watching") {
+        if (continueItems.isNotEmpty()) shelf(
+            "continue", "Continue watching",
+            action = { Pill("Clear", selected = false, onClick = { confirmClear = ClearRow.CONTINUE }, icon = Icons.Rounded.DeleteSweep) },
+        ) {
             items(continueItems, key = { it.key }) { e ->
                 WideCard(
                     title = e.title, subtitle = e.subtitle ?: remaining(e.position, e.duration), image = e.image,
@@ -149,7 +169,10 @@ fun HomeScreen(vm: AppViewModel) {
                 }
             }
         }
-        if (recentChannels.isNotEmpty()) shelf("recentch", "Recently watched") {
+        if (recentChannels.isNotEmpty()) shelf(
+            "recentch", "Recently watched",
+            action = { Pill("Clear", selected = false, onClick = { confirmClear = ClearRow.RECENT }, icon = Icons.Rounded.DeleteSweep) },
+        ) {
             items(recentChannels, key = { it.listKey }) { c ->
                 ChannelTile(c, epg.now(c), width = if (isTv) 220.dp else 180.dp, recent = true, onLongClick = { vm.toggleFavorite(c) }) {
                     vm.playChannel(c, lib.inCategory(Kind.LIVE, c.categoryId))
@@ -175,11 +198,19 @@ fun HomeScreen(vm: AppViewModel) {
     }
 }
 
-private fun LazyListScope.shelf(key: String, title: String, content: LazyListScope.() -> Unit) {
+private fun LazyListScope.shelf(
+    key: String,
+    title: String,
+    action: (@Composable () -> Unit)? = null,
+    content: LazyListScope.() -> Unit,
+) {
     item(key = key) {
         val pad = hPad()
         Column(Modifier.padding(top = 26.dp)) {
-            SectionTitle(title, Modifier.padding(horizontal = pad))
+            Row(Modifier.padding(horizontal = pad), verticalAlignment = Alignment.CenterVertically) {
+                SectionTitle(title, Modifier.weight(1f))
+                if (action != null) action()
+            }
             Spacer(Modifier.height(14.dp))
             LazyRow(
                 Modifier.fillMaxWidth().focusRestorer(),
@@ -309,6 +340,8 @@ private fun Hero(items: List<Stream>, vm: AppViewModel, open: (Stream) -> Unit) 
         }
     }
 }
+
+private enum class ClearRow { CONTINUE, RECENT }
 
 private fun greeting(): String = when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
     in 5..11 -> "Good morning"

@@ -138,8 +138,12 @@ fun LumenRoot(vm: AppViewModel, onExit: () -> Unit) {
     val sources by vm.store.sources.collectAsStateWithLifecycle()
     val settings by vm.store.settings.collectAsStateWithLifecycle()
     val screen = vm.current
+    // Lives above the player, so each screen's state (guide position, selected category, scroll,
+    // what you last opened) is still there when you come back from watching something.
+    val holder = rememberSaveableStateHolder()
 
     BackHandler(enabled = true) {
+        if (android.os.SystemClock.uptimeMillis() - vm.lastPlayerExit < 700) return@BackHandler
         if (!vm.back()) onExit()
     }
 
@@ -152,7 +156,7 @@ fun LumenRoot(vm: AppViewModel, onExit: () -> Unit) {
             screen is Screen.CategorySetup -> SetupFlow(vm, firstRun = false, startAtCategories = true)
             // First run, or an update added a setup step: country, then categories.
             !settings.setupDone -> SetupFlow(vm, firstRun = true, startAtCategories = false)
-            else -> Shell(vm, screen)
+            else -> Shell(vm, screen, holder)
         }
         if (screen !is Screen.Player) UpdatePrompts(vm)
         Toast(vm)
@@ -221,9 +225,8 @@ private fun CrashReport() {
 // ---------------------------------------------------------------------- shell
 
 @Composable
-private fun Shell(vm: AppViewModel, screen: Screen) {
+private fun Shell(vm: AppViewModel, screen: Screen, holder: SaveableStateHolder) {
     val isTv = LocalIsTv.current
-    val holder = rememberSaveableStateHolder()
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = isTv || maxWidth >= 840.dp
         AmbientBackground()

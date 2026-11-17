@@ -2,6 +2,14 @@
 
 Each `## version` section becomes the release notes on GitHub and the "What's new" text in the app's update dialog.
 
+## 2.2.1
+
+- **Back from the player returns to where you were**: the guide, channel list or search, with the same spot and the channel you picked still selected
+- Back on the TV remote now leaves the player in one press
+- **Recent searches** on the Search screen; tap one to search again, hold to remove it
+- Your last search and its results stay put while you watch something
+- **Clear history**: "Clear" buttons on Continue watching and Recently watched, plus Settings › History & storage for watch and search history
+
 ## 2.2.0
 
 - **New name: ZapBackTV**, with an early-2000s logo: a chunky CRT TV and a remote
