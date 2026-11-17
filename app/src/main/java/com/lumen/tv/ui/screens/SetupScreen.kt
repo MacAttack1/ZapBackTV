@@ -73,7 +73,7 @@ import com.lumen.tv.ui.components.Eyebrow
 import com.lumen.tv.ui.components.LoadProgressCard
 import com.lumen.tv.ui.components.Pill
 import com.lumen.tv.ui.components.LumenButton
-import com.lumen.tv.ui.components.LumenMark
+import com.lumen.tv.ui.components.BrandMark
 import com.lumen.tv.ui.components.PulseLoader
 import com.lumen.tv.ui.components.focusGlow
 import com.lumen.tv.ui.components.glass
@@ -169,7 +169,7 @@ private fun CountryStep(
                 .padding(horizontal = 20.dp, vertical = if (isTv) 36.dp else 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            if (list == null && error == null) PulseLoader(diameter = 84.dp) else LumenMark(72.dp)
+            if (list == null && error == null) PulseLoader(diameter = 84.dp) else BrandMark(72.dp)
             Spacer(Modifier.height(16.dp))
             Eyebrow(if (list == null) "Setting up" else "Step 1 of 2")
             Spacer(Modifier.height(8.dp))

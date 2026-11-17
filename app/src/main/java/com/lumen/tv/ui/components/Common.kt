@@ -10,6 +10,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -66,6 +67,8 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import com.lumen.tv.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -156,52 +159,22 @@ fun AmbientBackground(modifier: Modifier = Modifier) {
 
 // ------------------------------------------------------------------ brand
 
-/** The Lumen TV mark: a TV whose screen holds a rising sun. Matches the launcher icon. */
+/** The ZapBackTV mark (chunky CRT + remote). Same artwork as the launcher icon. */
 @Composable
-fun LumenMark(diameter: Dp, modifier: Modifier = Modifier) {
-    Canvas(modifier.size(diameter)) {
-        val u = size.minDimension / 420f // the icon was drawn on a 420-unit grid
-        fun p(x: Float, y: Float) = Offset(x * u, y * u)
-        val brand = Brush.linearGradient(BrandGradient, start = p(62f, 84f), end = p(358f, 336f))
-        val sunFill = Brush.verticalGradient(listOf(Color(0xFFFFF6DE), Color(0xFFFFC478)), startY = 200f * u, endY = 280f * u)
-        // Screen
-        drawRoundRect(brand, topLeft = p(71.5f, 93.5f), size = Size(277f * u, 189f * u), cornerRadius = CornerRadius(48.5f * u), style = Stroke(19f * u))
-        // Stand
-        drawLine(brand, p(170f, 300f), p(158f, 328f), strokeWidth = 15f * u, cap = StrokeCap.Round)
-        drawLine(brand, p(250f, 300f), p(262f, 328f), strokeWidth = 15f * u, cap = StrokeCap.Round)
-        // Sunrise, clipped to the inside of the screen
-        clipRect(81f * u, 103f * u, 339f * u, 273f * u) {
-            drawRect(Brush.verticalGradient(listOf(Color(0x33281446), Color(0x55782C5A)), startY = 103f * u, endY = 273f * u))
-            drawCircle(Brush.radialGradient(listOf(Color(0xA6FF9678), Color.Transparent), center = p(210f, 262f), radius = 110f * u), radius = 110f * u, center = p(210f, 262f))
-            drawCircle(sunFill, radius = 62f * u, center = p(210f, 262f))
-            for (deg in listOf(-162f, -126f, -90f, -54f, -18f)) {
-                val a = Math.toRadians(deg.toDouble())
-                val r0 = if (deg == -90f) 80f else 82f
-                val r1 = if (deg == -90f) 116f else 110f
-                val c = kotlin.math.cos(a).toFloat(); val s = kotlin.math.sin(a).toFloat()
-                drawLine(Color(0xFFFFE6BE), p(210f + r0 * c, 262f + r0 * s), p(210f + r1 * c, 262f + r1 * s), strokeWidth = 11f * u, cap = StrokeCap.Round)
-            }
-        }
-    }
+fun BrandMark(diameter: Dp, modifier: Modifier = Modifier) {
+    Image(
+        painter = painterResource(R.drawable.brand_mark), contentDescription = null,
+        modifier = modifier.size(diameter), contentScale = ContentScale.Fit,
+    )
 }
 
-/** The icon's own colors, independent of the accent the user picks. */
-val BrandGradient = listOf(Color(0xFFFFBE6E), Color(0xFFFF6096), Color(0xFF8068FF))
-
+/** The "ZapBack TV" wordmark artwork, sized from a text size so it lines up with nearby text. */
 @Composable
 fun Wordmark(modifier: Modifier = Modifier, fontSize: TextUnit = 15.sp) {
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            "LUMEN", color = Hue.TextHi, fontSize = fontSize, fontFamily = InterDisplay,
-            fontWeight = FontWeight.Black, letterSpacing = 0.16.em, maxLines = 1,
-        )
-        Spacer(Modifier.width((fontSize.value * 0.4f).dp))
-        Text(
-            "TV", color = Color.White, fontSize = fontSize, fontFamily = InterDisplay,
-            fontWeight = FontWeight.Black, letterSpacing = 0.1.em, maxLines = 1,
-            modifier = Modifier.gradientTint(Brush.linearGradient(BrandGradient)),
-        )
-    }
+    Image(
+        painter = painterResource(R.drawable.brand_wordmark), contentDescription = "ZapBackTV",
+        modifier = modifier.height((fontSize.value * 1.7f).dp), contentScale = ContentScale.Fit,
+    )
 }
 
 /** Expanding rings around a bright core — the app's loading indicator. */

@@ -44,7 +44,8 @@ data class Accent(val name: String, val main: Color, val second: Color) {
 }
 
 val Accents = listOf(
-    Accent("Dawn", Color(0xFFFF6A9A), Color(0xFFFFB06B)),   // the app icon's colors
+    Accent("Zap", Color(0xFFFF3DA0), Color(0xFFFFB21E)),     // the logo's magenta and orange
+    Accent("Dawn", Color(0xFFFF6A9A), Color(0xFFFFB06B)),
     Accent("Aurora", Color(0xFF9B8CFF), Color(0xFF22D3EE)),
     Accent("Ember", Color(0xFFFF7A45), Color(0xFFFFB55C)),
     Accent("Nova", Color(0xFFFF5CA8), Color(0xFFFF9D6C)),

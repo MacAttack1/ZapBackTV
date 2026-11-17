@@ -86,7 +86,7 @@ import com.lumen.tv.ui.components.AmbientBackground
 import com.lumen.tv.ui.components.EmptyState
 import com.lumen.tv.ui.components.LoadProgressCard
 import com.lumen.tv.ui.components.LumenButton
-import com.lumen.tv.ui.components.LumenMark
+import com.lumen.tv.ui.components.BrandMark
 import com.lumen.tv.ui.components.RoundIconButton
 import com.lumen.tv.ui.components.SlimProgressBar
 import com.lumen.tv.ui.components.UpdateDialog
@@ -194,7 +194,7 @@ private fun CrashReport() {
     AlertDialog(
         onDismissRequest = { dismiss() },
         containerColor = Hue.Surface2,
-        title = { Text("Lumen TV closed unexpectedly", color = Hue.TextHi) },
+        title = { Text("ZapBackTV closed unexpectedly", color = Hue.TextHi) },
         text = {
             Column {
                 Text("Copy this report and send it to whoever is helping you fix the app.", color = Hue.TextMid, style = MaterialTheme.typography.bodyMedium)
@@ -327,7 +327,7 @@ private fun SideRail(vm: AppViewModel, modifier: Modifier = Modifier) {
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(Modifier.padding(start = 12.dp, bottom = 20.dp).height(40.dp), verticalAlignment = Alignment.CenterVertically) {
-                LumenMark(36.dp)
+                BrandMark(36.dp)
                 AnimatedVisibility(expanded) {
                     Column(Modifier.padding(start = 12.dp)) {
                         Wordmark()
@@ -395,7 +395,7 @@ private fun PhoneTopBar(vm: AppViewModel) {
         Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LumenMark(34.dp)
+        BrandMark(34.dp)
         Column(Modifier.weight(1f).padding(start = 10.dp).clip(RoundedCornerShape(8.dp)).clickable { vm.navigate(Screen.Settings) }) {
             Wordmark()
             Text(source?.name ?: "", style = MaterialTheme.typography.bodySmall, color = Hue.TextLo, maxLines = 1, overflow = TextOverflow.Ellipsis)

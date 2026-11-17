@@ -21,7 +21,7 @@ class LumenApp : Application(), ImageLoaderFactory {
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             runCatching {
                 val text = buildString {
-                    append("Lumen TV ${BuildConfig.VERSION_NAME} · Android ${android.os.Build.VERSION.RELEASE} · ${android.os.Build.MODEL}\n")
+                    append("ZapBackTV ${BuildConfig.VERSION_NAME} · Android ${android.os.Build.VERSION.RELEASE} · ${android.os.Build.MODEL}\n")
                     append("Thread: ${thread.name}\n\n")
                     append(android.util.Log.getStackTraceString(error))
                 }

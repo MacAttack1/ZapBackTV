@@ -1,8 +1,8 @@
-# Building and releasing Lumen TV
+# Building and releasing ZapBackTV
 
 ## The signing key (read this first)
 
-Android only installs an update over an app signed with **the same key**. Lumen TV's key is in the
+Android only installs an update over an app signed with **the same key**. ZapBackTV's key is in the
 `signing/` folder (`lumen-tv.jks` + `keystore.properties`). Every build uses it automatically: on your
 PC, on your phone, and on GitHub (from repository secrets).
 
@@ -21,7 +21,12 @@ PC, on your phone, and on GitHub (from repository secrets).
    downloading the Android SDK (the defaults are fine). You don't need to create a project.
 2. Double-click **`build-apk.bat`** in the project folder.
    The first build downloads Gradle and the libraries, so it takes a few minutes.
-3. The APK appears in **`dist\LumenTV-<version>.apk`**.
+3. The APK appears in **`dist\ZapBackTV-<version>.apk`**.
+
+**Java version:** the build tool runs on **Java 17 to 23**. `build-apk.bat` finds a suitable one by
+itself (Android Studio's built-in runtime, `JAVA_HOME`, or an installed JDK 17/21). If you only have a
+newer Java (24, 25…), the build fails with nothing but the version number, e.g. `25.0.4`. Install
+Java 21 alongside it (`winget install EclipseAdoptium.Temurin.21.JDK`) and run the script again.
 
 Options (from a Command Prompt in the folder):
 
@@ -59,7 +64,7 @@ The app checks `https://github.com/<repo>/releases` for a newer version. The rep
 `gradle.properties`:
 
 ```properties
-lumen.githubRepo=MacAttack1/LumenTV
+lumen.githubRepo=MacAttack1/ZapBackTV
 ```
 
 The repository must be **public** so the app can read releases without a password.
@@ -117,4 +122,4 @@ repository secrets (`LUMEN_KEYSTORE_B64`, `LUMEN_KEYSTORE_PASSWORD`) and pushes 
 - `version.properties` holds the only version number (`versionName=2.1.0`).
 - The Android version code is derived from it (2.1.0 → 20100), so it always goes up.
 - A release is offered when its tag (`v2.1.1`) is higher than the installed version and it has an
-  `.apk` attached. The app checks that the APK is Lumen TV and newer before installing it.
+  `.apk` attached. The app checks that the APK is ZapBackTV and newer before installing it.

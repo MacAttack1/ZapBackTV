@@ -87,11 +87,11 @@ fun UpdateDialog(vm: AppViewModel) {
                 .glass(RoundedCornerShape(28.dp), fill = Hue.Surface1.copy(alpha = 0.97f)).padding(24.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                LumenMark(58.dp)
+                BrandMark(58.dp)
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Eyebrow("Update available")
-                    Text("Lumen TV ${release.version}", style = MaterialTheme.typography.headlineLarge, color = Hue.TextHi)
+                    Text("ZapBackTV ${release.version}", style = MaterialTheme.typography.headlineLarge, color = Hue.TextHi)
                     Text(
                         listOfNotNull(
                             "You have ${vm.updater.currentVersion}",
@@ -121,11 +121,11 @@ fun UpdateDialog(vm: AppViewModel) {
                     ProgressLine(s.fraction ?: 0.05f, Modifier.fillMaxWidth(), height = 6.dp)
                 }
                 is UpdateState.Installing -> Text(
-                    "Confirm the install in Android's prompt. Lumen TV will close and reopen updated.",
+                    "Confirm the install in Android's prompt. ZapBackTV will close and reopen updated.",
                     style = MaterialTheme.typography.bodyMedium, color = Hue.TextMid,
                 )
                 is UpdateState.Ready -> if (s.needsPermission) Text(
-                    "Android needs your OK to let Lumen TV install updates. Tap “Allow installs”, switch it on, then come back and tap “Install”.",
+                    "Android needs your OK to let ZapBackTV install updates. Tap “Allow installs”, switch it on, then come back and tap “Install”.",
                     style = MaterialTheme.typography.bodyMedium, color = Hue.TextMid,
                 ) else Text("Downloaded and ready to install.", style = MaterialTheme.typography.bodyMedium, color = Hue.TextMid)
                 is UpdateState.Failed -> Text(s.message, style = MaterialTheme.typography.bodyMedium, color = Hue.Live)
@@ -167,7 +167,7 @@ fun WhatsNewDialog(version: String, notes: String, onClose: () -> Unit) {
                 .glass(RoundedCornerShape(28.dp), fill = Hue.Surface1.copy(alpha = 0.97f)).padding(24.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                LumenMark(58.dp)
+                BrandMark(58.dp)
                 Spacer(Modifier.width(14.dp))
                 Column {
                     Eyebrow("Updated")

@@ -82,7 +82,7 @@ import com.lumen.tv.ui.theme.LocalIsTv
 import com.lumen.tv.ui.theme.Hue
 import kotlinx.coroutines.launch
 import com.lumen.tv.ui.components.AmbientBackground
-import com.lumen.tv.ui.components.LumenMark
+import com.lumen.tv.ui.components.BrandMark
 import com.lumen.tv.ui.components.Wordmark
 import com.lumen.tv.ui.components.glass
 import androidx.compose.ui.unit.sp
@@ -188,15 +188,15 @@ fun AddSourceScreen(vm: AppViewModel, existing: Source?, prefillUrl: String?, fi
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        LumenMark(76.dp)
+                        BrandMark(76.dp)
                         Spacer(Modifier.width(16.dp))
                         Wordmark(fontSize = 22.sp)
                     }
                     Spacer(Modifier.height(28.dp))
-                    Text(if (firstRun) "Welcome to Lumen TV" else if (existing != null) "Edit playlist" else "Add a playlist", style = MaterialTheme.typography.displayLarge, color = Hue.TextHi)
+                    Text(if (firstRun) "Welcome to ZapBackTV" else if (existing != null) "Edit playlist" else "Add a playlist", style = MaterialTheme.typography.displayLarge, color = Hue.TextHi)
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        "Bring your own IPTV service. Lumen TV supports Xtream Codes logins and M3U playlists, with a full TV guide, catch-up, movies and series.",
+                        "Bring your own IPTV service. ZapBackTV supports Xtream Codes logins and M3U playlists, with a full TV guide, catch-up, movies and series.",
                         style = MaterialTheme.typography.bodyLarge, color = Hue.TextMid, modifier = Modifier.widthIn(max = 460.dp),
                     )
                     Spacer(Modifier.height(32.dp))
@@ -216,12 +216,12 @@ fun AddSourceScreen(vm: AppViewModel, existing: Source?, prefillUrl: String?, fi
                 if (!wide) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (!firstRun) { RoundIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Back", { vm.back() }); Spacer(Modifier.width(12.dp)) }
-                        LumenMark(44.dp)
+                        BrandMark(44.dp)
                         Spacer(Modifier.width(12.dp))
                         Wordmark(fontSize = 17.sp)
                     }
                     Spacer(Modifier.height(18.dp))
-                    Text(if (firstRun) "Welcome to Lumen TV" else if (existing != null) "Edit playlist" else "Add a playlist", style = MaterialTheme.typography.displayMedium, color = Hue.TextHi)
+                    Text(if (firstRun) "Welcome to ZapBackTV" else if (existing != null) "Edit playlist" else "Add a playlist", style = MaterialTheme.typography.displayMedium, color = Hue.TextHi)
                     Text("Connect your IPTV service to get started.", style = MaterialTheme.typography.bodyLarge, color = Hue.TextMid)
                     Spacer(Modifier.height(22.dp))
                 }
@@ -328,7 +328,7 @@ fun AddSourceScreen(vm: AppViewModel, existing: Source?, prefillUrl: String?, fi
                 }
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    "Lumen TV is a player only and doesn't provide any channels or content.",
+                    "ZapBackTV is a player only and doesn't provide any channels or content.",
                     style = MaterialTheme.typography.bodySmall, color = Hue.TextLo,
                 )
             }

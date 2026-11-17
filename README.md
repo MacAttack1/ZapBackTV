@@ -1,8 +1,8 @@
-<p align="center"><img src="docs/banner.png" alt="Lumen TV" width="640"></p>
+<p align="center"><img src="docs/banner.png" alt="ZapBackTV" width="640"></p>
 
-# Lumen TV
+# ZapBackTV
 
-A media player for Android TV and Android phones. Bring your own playlist: Lumen TV supports
+A media player for Android TV and Android phones. Bring your own playlist: ZapBackTV supports
 Xtream-compatible logins (server, username and password) and M3U / M3U8 playlists by link or file.
 It doesn't include or provide any channels or content.
 
@@ -22,7 +22,7 @@ with a floating tab bar on phones.
 
 ## Install
 
-Download the latest `LumenTV-x.y.z.apk` from [Releases](../../releases) and open it on your device
+Download the latest `ZapBackTV-x.y.z.apk` from [Releases](../../releases) and open it on your device
 (you may need to allow installing apps from your browser or file manager). After that, the app
 updates itself: **Settings › Updates**.
 

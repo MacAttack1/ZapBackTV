@@ -1,5 +1,5 @@
 <#
-  Publish a Lumen TV update.
+  Publish a ZapBackTV update.
 
       powershell -ExecutionPolicy Bypass -File scripts\release.ps1 -Version 2.1.1
 
@@ -35,19 +35,19 @@ if (-not ($notes -join '').Trim()) { Fail "Add a '## $Version' section with note
 
 (Get-Content version.properties) -replace '^versionName=.*', "versionName=$Version" | Set-Content version.properties -Encoding ascii
 Run { git add -A } 'git add'
-Run { git commit -m "Lumen TV $Version" } 'Commit'
+Run { git commit -m "ZapBackTV $Version" } 'Commit'
 Run { git tag "v$Version" } 'Tagging'
 
 if ($Local) {
     cmd /c "build-apk.bat release < nul"
-    $apk = "dist\LumenTV-$Version.apk"
+    $apk = "dist\ZapBackTV-$Version.apk"
     if (-not (Test-Path $apk)) { Fail "Build didn't produce $apk" }
     Run { git push origin HEAD } 'Push'
     Run { git push origin "v$Version" } 'Pushing the tag'
     $tmp = New-TemporaryFile; $notes | Set-Content $tmp -Encoding utf8
-    Run { gh release create "v$Version" $apk --title "Lumen TV $Version" --notes-file $tmp } 'Creating the release'
+    Run { gh release create "v$Version" $apk --title "ZapBackTV $Version" --notes-file $tmp } 'Creating the release'
     Remove-Item $tmp
-    Write-Host "Published Lumen TV $Version." -ForegroundColor Green
+    Write-Host "Published ZapBackTV $Version." -ForegroundColor Green
 } else {
     Run { git push origin HEAD } 'Push'
     Run { git push origin "v$Version" } 'Pushing the tag'

@@ -1,6 +1,6 @@
 @echo off
 rem ============================================================================
-rem  Lumen TV - build the APK on Windows
+rem  ZapBackTV - build the APK on Windows
 rem
 rem    build-apk.bat               release APK (signed with your key in signing\)
 rem    build-apk.bat debug         debug APK
@@ -11,7 +11,7 @@ rem  The finished APK is copied to the dist\ folder.
 rem ============================================================================
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
-title Lumen TV build
+title ZapBackTV build
 
 set "TASK=assembleRelease"
 set "KIND=release"
@@ -74,7 +74,7 @@ echo  SDK:  !SDK!
 if not exist "signing\keystore.properties" (
     echo.
     echo  [i] No signing key in signing\ - the APK will use a temporary debug key and
-    echo      WON'T install over a copy signed with your Lumen TV key. See BUILDING.md.
+    echo      WON'T install over a copy signed with your ZapBackTV key. See BUILDING.md.
     echo.
 )
 

@@ -51,7 +51,7 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
     }
 
-    /** "Open with Lumen TV" on an .m3u file or link pre-fills the add-playlist screen. */
+    /** "Open with ZapBackTV" on an .m3u file or link pre-fills the add-playlist screen. */
     private fun handleIntent(intent: Intent?) {
         val data = intent?.data ?: return
         if (intent.action != Intent.ACTION_VIEW) return

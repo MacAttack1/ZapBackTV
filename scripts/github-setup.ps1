@@ -1,5 +1,5 @@
 <#
-  One-time GitHub setup for Lumen TV (run from PowerShell or Command Prompt in the project folder):
+  One-time GitHub setup for ZapBackTV (run from PowerShell or Command Prompt in the project folder):
 
       powershell -ExecutionPolicy Bypass -File scripts\github-setup.ps1
 
@@ -33,7 +33,7 @@ $login = $login.Trim()
 
 # ---- which repository
 $propLine = Select-String -Path gradle.properties -Pattern '^lumen\.githubRepo=(.+)$'
-$repo = if ($propLine) { $propLine.Matches[0].Groups[1].Value.Trim() } else { "$login/LumenTV" }
+$repo = if ($propLine) { $propLine.Matches[0].Groups[1].Value.Trim() } else { "$login/ZapBackTV" }
 $owner, $name = $repo.Split('/', 2)
 if ($owner -ne $login) {
     Write-Host "You're signed in to GitHub as '$login', but gradle.properties says '$repo'." -ForegroundColor Yellow
@@ -49,14 +49,14 @@ Write-Host "Repository: $repo" -ForegroundColor Cyan
 # ---- create it if needed
 if ((Quiet { gh repo view $repo }) -ne 0) {
     Write-Host "Creating $repo (public, so the app can check its releases without a password)..."
-    gh repo create $repo --public --description "Lumen TV - a media player for Android TV and phones"
+    gh repo create $repo --public --description "ZapBackTV - a media player for Android TV and phones"
     if ($LASTEXITCODE -ne 0) { Fail "Couldn't create $repo. If it belongs to an organization, create it on github.com first, then run this again." }
 } else {
     Write-Host "$repo already exists."
 }
 
 # ---- signing key -> encrypted repository secrets (never visible in the repo)
-if (-not (Test-Path signing\keystore.properties)) { Fail "signing\keystore.properties is missing - you need the Lumen TV signing key first (see BUILDING.md)." }
+if (-not (Test-Path signing\keystore.properties)) { Fail "signing\keystore.properties is missing - you need the ZapBackTV signing key first (see BUILDING.md)." }
 $pw = (Select-String -Path signing\keystore.properties -Pattern '^storePassword=(.+)$').Matches[0].Groups[1].Value.Trim()
 $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path signing\lumen-tv.jks)))
 gh secret set LUMEN_KEYSTORE_B64 --repo $repo --body $b64
@@ -72,7 +72,7 @@ if ((Quiet { git remote get-url origin }) -eq 0) { git remote set-url origin $ur
 if (-not (git config user.name)) { git config user.name $login }
 if (-not (git config user.email)) { git config user.email "$login@users.noreply.github.com" }
 git add -A
-if ((Quiet { git diff --cached --quiet }) -ne 0) { git commit -m "Lumen TV" | Out-Null }
+if ((Quiet { git diff --cached --quiet }) -ne 0) { git commit -m "ZapBackTV" | Out-Null }
 git branch -M main
 git push -u origin main
 if ($LASTEXITCODE -ne 0) { Fail "Push failed - see the message above." }

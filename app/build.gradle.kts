@@ -77,7 +77,7 @@ android {
     applicationVariants.all {
         outputs.all {
             (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
-                "LumenTV-$appVersion" + (if (buildType.name == "debug") "-debug" else "") + ".apk"
+                "ZapBackTV-$appVersion" + (if (buildType.name == "debug") "-debug" else "") + ".apk"
         }
     }
 }

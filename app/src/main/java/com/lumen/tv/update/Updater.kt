@@ -130,7 +130,7 @@ class Updater(private val context: Context, private val store: Store) {
             try {
                 val dir = File(context.cacheDir, "updates").apply { mkdirs() }
                 dir.listFiles()?.forEach { it.delete() }
-                val apk = File(dir, "LumenTV-${release.version}.apk")
+                val apk = File(dir, "ZapBackTV-${release.version}.apk")
                 Http.download(url, null, apk) { read, total ->
                     val size = if (total > 0) total else release.apkSize
                     _state.value = UpdateState.Downloading(release, if (size > 0) (read.toFloat() / size).coerceIn(0f, 1f) else null)
@@ -172,7 +172,7 @@ class Updater(private val context: Context, private val store: Store) {
         }
     }
 
-    /** Opens the system screen where "install unknown apps" is allowed for Lumen TV. */
+    /** Opens the system screen where "install unknown apps" is allowed for ZapBackTV. */
     fun openInstallPermission() {
         val intents = buildList {
             if (Build.VERSION.SDK_INT >= 26) add(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")))
@@ -195,7 +195,7 @@ class Updater(private val context: Context, private val store: Store) {
             PackageInstaller.STATUS_SUCCESS -> UpdateState.Idle
             PackageInstaller.STATUS_FAILURE_ABORTED -> release?.let { UpdateState.Available(it, prompt = false) } ?: UpdateState.Idle
             PackageInstaller.STATUS_FAILURE_CONFLICT, PackageInstaller.STATUS_FAILURE_INCOMPATIBLE -> UpdateState.Failed(
-                "This update is signed with a different key than the installed app. Uninstall Lumen TV once, then install " +
+                "This update is signed with a different key than the installed app. Uninstall ZapBackTV once, then install " +
                     "the update from the GitHub releases page. Future updates will install normally.", release,
             )
             PackageInstaller.STATUS_FAILURE_STORAGE -> UpdateState.Failed("Not enough storage to install the update.", release)
@@ -240,7 +240,7 @@ class Updater(private val context: Context, private val store: Store) {
         )
     }
 
-    /** Refuses files that aren't a newer Lumen TV, so a wrong asset can't be installed by mistake. */
+    /** Refuses files that aren't a newer ZapBackTV, so a wrong asset can't be installed by mistake. */
     private fun verify(apk: File) {
         val info = context.packageManager.getPackageArchiveInfo(apk.path, 0)
             ?: throw IOException("the downloaded file isn't a valid APK")

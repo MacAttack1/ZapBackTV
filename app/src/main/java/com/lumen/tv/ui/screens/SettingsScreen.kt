@@ -286,9 +286,9 @@ fun SettingsScreen(vm: AppViewModel) {
 
         item {
             Column(Modifier.padding(top = 8.dp, start = 4.dp)) {
-                Text("Lumen TV ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleSmall, color = Hue.TextMid)
+                Text("ZapBackTV ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleSmall, color = Hue.TextMid)
                 Text(
-                    "A player for your own IPTV subscriptions. Lumen TV does not provide any content.",
+                    "A player for your own IPTV subscriptions. ZapBackTV does not provide any content.",
                     style = MaterialTheme.typography.bodySmall, color = Hue.TextLo,
                 )
             }
