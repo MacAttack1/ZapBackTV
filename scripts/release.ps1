@@ -14,12 +14,16 @@ param(
     [Parameter(Mandatory = $true)][string]$Version,
     [switch]$Local
 )
-$ErrorActionPreference = 'Stop'
+# Exit codes are checked by hand: git and gh print normal progress on stderr, which Windows
+# PowerShell 5 would otherwise treat as fatal errors.
+$ErrorActionPreference = 'Continue'
 Set-Location (Split-Path $PSScriptRoot -Parent)
+function Fail($msg) { Write-Host ""; Write-Host "  [!] $msg" -ForegroundColor Red; Write-Host ""; exit 1 }
+function Run { param([scriptblock]$cmd, [string]$what) & $cmd; if ($LASTEXITCODE -ne 0) { Fail "$what failed - see the message above." } }
 
-if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Use a version like 2.1.1" }
+if ($Version -notmatch '^\d+\.\d+\.\d+$') { Fail "Use a version like 2.1.1" }
 $current = ((Select-String -Path version.properties -Pattern '^versionName=(.+)$').Matches[0].Groups[1].Value).Trim()
-if ([version]$Version -le [version]$current) { throw "$Version isn't newer than the current version ($current)." }
+if ([version]$Version -le [version]$current) { Fail "$Version isn't newer than the current version ($current)." }
 
 $escaped = [regex]::Escape($Version)
 $notes = @(); $inSection = $false
@@ -27,25 +31,25 @@ foreach ($line in Get-Content CHANGELOG.md) {
     if ($line -match '^## ') { $inSection = $line -match "^## \[?v?$escaped(\]|\s|$)"; continue }
     if ($inSection) { $notes += $line }
 }
-if (-not ($notes -join '').Trim()) { throw "Add a '## $Version' section with notes to CHANGELOG.md first - it becomes the update notes in the app." }
+if (-not ($notes -join '').Trim()) { Fail "Add a '## $Version' section with notes to CHANGELOG.md first - it becomes the update notes in the app." }
 
 (Get-Content version.properties) -replace '^versionName=.*', "versionName=$Version" | Set-Content version.properties -Encoding ascii
-git add -A
-git commit -m "Lumen TV $Version"
-git tag "v$Version"
+Run { git add -A } 'git add'
+Run { git commit -m "Lumen TV $Version" } 'Commit'
+Run { git tag "v$Version" } 'Tagging'
 
 if ($Local) {
     cmd /c "build-apk.bat release < nul"
     $apk = "dist\LumenTV-$Version.apk"
-    if (-not (Test-Path $apk)) { throw "Build didn't produce $apk" }
-    git push origin HEAD
-    git push origin "v$Version"
+    if (-not (Test-Path $apk)) { Fail "Build didn't produce $apk" }
+    Run { git push origin HEAD } 'Push'
+    Run { git push origin "v$Version" } 'Pushing the tag'
     $tmp = New-TemporaryFile; $notes | Set-Content $tmp -Encoding utf8
-    gh release create "v$Version" $apk --title "Lumen TV $Version" --notes-file $tmp
+    Run { gh release create "v$Version" $apk --title "Lumen TV $Version" --notes-file $tmp } 'Creating the release'
     Remove-Item $tmp
     Write-Host "Published Lumen TV $Version." -ForegroundColor Green
 } else {
-    git push origin HEAD
-    git push origin "v$Version"
+    Run { git push origin HEAD } 'Push'
+    Run { git push origin "v$Version" } 'Pushing the tag'
     Write-Host "Pushed v$Version. GitHub Actions is building and publishing it (Actions tab, ~5 minutes)." -ForegroundColor Green
 }

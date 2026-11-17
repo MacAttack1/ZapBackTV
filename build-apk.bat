@@ -17,23 +17,34 @@ set "TASK=assembleRelease"
 set "KIND=release"
 if /i "%~1"=="debug" ( set "TASK=assembleDebug" & set "KIND=debug" )
 
-rem ---- Java 17+: JAVA_HOME, otherwise the runtime bundled with Android Studio
-if defined JAVA_HOME if exist "%JAVA_HOME%\bin\java.exe" goto :java_ok
+rem ---- Java: Gradle 8.11 runs on Java 17 to 23 only (newer ones fail with just "25.0.4").
+rem      Prefer Android Studio's bundled runtime, then JAVA_HOME, then common JDK install folders.
+set "PICK="
 for %%P in ("%ProgramFiles%\Android\Android Studio\jbr" "%LOCALAPPDATA%\Programs\Android Studio\jbr" "%ProgramFiles%\Android\Android Studio\jre") do (
-    if exist "%%~P\bin\java.exe" (
-        set "JAVA_HOME=%%~P"
-        goto :java_ok
+    if not defined PICK call :tryjava "%%~P"
+)
+if not defined PICK if defined JAVA_HOME call :tryjava "%JAVA_HOME%"
+for %%R in ("%ProgramFiles%\Eclipse Adoptium" "%ProgramFiles%\Microsoft" "%ProgramFiles%\Java" "%ProgramFiles%\Zulu" "%ProgramFiles%\Amazon Corretto") do (
+    if exist "%%~R" for /d %%D in ("%%~R\jdk-21*" "%%~R\jdk-17*" "%%~R\jdk21*" "%%~R\jdk17*" "%%~R\zulu-21*" "%%~R\zulu-17*") do (
+        if not defined PICK call :tryjava "%%~D"
     )
 )
-echo.
-echo  [!] Java wasn't found.
-echo      Install Android Studio from https://developer.android.com/studio and open it once,
-echo      or set JAVA_HOME to a JDK 17 (or newer) folder, then run this again.
-echo.
-pause
-exit /b 1
-:java_ok
-echo  Java: %JAVA_HOME%
+if not defined PICK (
+    echo.
+    echo  [!] No compatible Java found. This project needs Java 17 to 23
+    if defined FOUNDJV echo      ^(found Java !FOUNDJV!, which is too new for the build tool^).
+    echo.
+    echo      Easiest fix - install Java 21 alongside it ^(your other Java keeps working^):
+    echo          winget install EclipseAdoptium.Temurin.21.JDK
+    echo      or download it from https://adoptium.net/temurin/releases/?version=21
+    echo      Then run this again.
+    echo.
+    pause
+    exit /b 1
+)
+set "JAVA_HOME=%PICK%"
+set "PATH=%JAVA_HOME%\bin;%PATH%"
+echo  Java: %JAVA_HOME%  (version !PICKV!)
 
 rem ---- Android SDK: local.properties, ANDROID_HOME, or Android Studio's default location
 if exist local.properties (
@@ -98,3 +109,20 @@ if /i "%~2"=="install" (
 )
 echo.
 pause
+exit /b 0
+
+rem ---- :tryjava <folder>  -> sets PICK / PICKV if that folder holds Java 17-23
+:tryjava
+if not exist "%~1\bin\java.exe" exit /b 0
+set "JV="
+for /f "tokens=3" %%v in ('""%~1\bin\java.exe" -version 2>&1 | findstr /i "version""') do if not defined JV set "JV=%%~v"
+if not defined JV exit /b 0
+set "JM="
+for /f "delims=.-+" %%m in ("%JV%") do set "JM=%%m"
+if not defined JM exit /b 0
+if "%JM%"=="1" exit /b 0
+if %JM% LSS 17 exit /b 0
+if %JM% GTR 23 ( set "FOUNDJV=%JV%" & exit /b 0 )
+set "PICK=%~1"
+set "PICKV=%JV%"
+exit /b 0
