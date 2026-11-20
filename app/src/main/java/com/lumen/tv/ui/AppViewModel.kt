@@ -50,6 +50,8 @@ sealed interface Screen {
     data object Search : Screen { override val route = "search" }
     data object Favorites : Screen { override val route = "favorites" }
     data object Settings : Screen { override val route = "settings" }
+    /** Watch history: everything watched, with picking and removing. [filter] is "all", "live" or "resume". */
+    data class History(val filter: String = "all") : Screen { override val route = "history" }
     data class MovieDetail(val movie: Stream) : Screen { override val route = "movie/${movie.id}" }
     data class SeriesDetail(val series: Stream) : Screen { override val route = "series/${series.id}" }
     data object CountrySetup : Screen { override val route = "setup" }

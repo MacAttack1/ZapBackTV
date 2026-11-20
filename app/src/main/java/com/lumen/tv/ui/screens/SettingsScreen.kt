@@ -734,7 +734,12 @@ private fun StoragePage(vm: AppViewModel, d: SettingsDialogs) {
     val searched by vm.store.searches.collectAsStateWithLifecycle()
     Group("History") {
         ActionRow(
-            "Clear watch history", Icons.Rounded.History,
+            "Watch history", Icons.Rounded.History,
+            value = if (watched.isEmpty()) "Empty" else "${watched.size}",
+            hint = "See everything you've watched and pick what to remove.",
+        ) { vm.navigate(Screen.History()) }
+        ActionRow(
+            "Clear all watch history", Icons.Rounded.DeleteSweep,
             value = if (watched.isEmpty()) "Empty" else "${watched.size}",
             hint = "Continue watching, recently watched channels and resume points.",
         ) { if (watched.isEmpty()) vm.toast = "Watch history is already empty" else d.confirmClearHistory = true }

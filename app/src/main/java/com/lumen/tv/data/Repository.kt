@@ -73,6 +73,7 @@ class Repository(private val context: Context, private val store: Store) {
         if (current?.id != source.id) {
             _epg.value = EpgData.EMPTY; _account.value = null
             seriesCache.clear(); vodCache.clear()
+            _channelListings.value = emptyMap(); listingRequests.clear()
         }
         current = source
         loadJob = scope.launch {
@@ -448,6 +449,41 @@ class Repository(private val context: Context, private val store: Store) {
             val client = XtreamClient(source)
             client.parseVodInfo(client.raw("get_vod_info", "&vod_id=${movie.id}")).also { vodCache[movie.id] = it }
         }.getOrNull()
+    }
+
+    // ------------------------------------------------------------------ per-channel listings
+
+    /**
+     * Listings fetched one channel at a time from an Xtream provider, for channels the guide file
+     * has nothing for (missing or mismatched guide IDs). Keyed by Stream.key.
+     */
+    private val _channelListings = MutableStateFlow<Map<String, List<Programme>>>(emptyMap())
+    val channelListings: StateFlow<Map<String, List<Programme>>> = _channelListings
+    private val listingRequests = ConcurrentHashMap<String, Long>()
+    private val listingSlots = kotlinx.coroutines.sync.Semaphore(4)
+
+    /** Asks the provider for [channel]'s schedule if it isn't known yet (at most every 30 minutes). */
+    fun requestListings(channel: Stream) {
+        val source = current ?: return
+        if (source.type != SourceType.XTREAM || channel.kind != Kind.LIVE) return
+        val nowMs = System.currentTimeMillis()
+        val last = listingRequests[channel.key]
+        if (last != null && nowMs - last < 30 * 60_000L) return
+        listingRequests[channel.key] = nowMs
+        scope.launch {
+            listingSlots.acquire()
+            try {
+                val list = runCatching {
+                    val client = XtreamClient(source)
+                    val shift = store.settings.value.epgShiftHours * 3600_000L
+                    client.parseShortEpg(client.raw("get_short_epg", "&stream_id=${channel.id}&limit=16"))
+                        .map { if (shift == 0L) it else it.copy(start = it.start + shift, end = it.end + shift) }
+                }.getOrDefault(emptyList())
+                if (current?.id == source.id) _channelListings.update { it + (channel.key to list) }
+            } finally {
+                listingSlots.release()
+            }
+        }
     }
 
     suspend fun shortEpg(channel: Stream): List<Programme> = withContext(Dispatchers.IO) {

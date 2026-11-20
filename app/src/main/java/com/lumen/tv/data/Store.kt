@@ -210,6 +210,17 @@ class Store(context: Context) {
             p to (it.getOrNull(1)?.toLongOrNull() ?: 0L)
         }
 
+    /** Removes several entries at once, along with their saved resume points. */
+    fun removeHistory(entries: Collection<WatchEntry>) {
+        if (entries.isEmpty()) return
+        val ids = entries.mapTo(HashSet()) { "${it.sourceId}|${it.key}" }
+        _history.value = _history.value.filterNot { "${it.sourceId}|${it.key}" in ids }
+        writeHistory()
+        val e = sp.edit()
+        ids.forEach { e.remove("pos|$it") }
+        e.apply()
+    }
+
     fun removeHistory(entry: WatchEntry) {
         _history.value = _history.value.filterNot { it.key == entry.key && it.sourceId == entry.sourceId }
         writeHistory()

@@ -2,6 +2,13 @@
 
 Each `## version` section becomes the release notes on GitHub and the "What's new" text in the app's update dialog.
 
+## 2.3.3
+
+- **Fixed channels showing "No information" in the TV guide**: on big guides, listings stopped partway through so later channels got nothing. Every channel now keeps its listings; if memory is tight the guide covers fewer days or skips descriptions instead
+- Guide IDs now match regardless of upper/lower case (e.g. "ESPN.us" and "espn.us")
+- For Xtream playlists, channels still missing from the guide file get their schedule straight from your provider while they're on screen
+- **Watch history screen** (Settings › History & storage › Watch history, or "Edit" on Continue watching and Recently watched): see everything you've watched by day, filter by channels, movies, episodes or in progress, play anything again, and pick exactly what to remove: one at a time, or tick several with Select
+
 ## 2.3.2
 
 - **Opens straight into your library**: the organized channel, movie and series list is saved, so the app no longer re-reads your whole playlist every time it starts

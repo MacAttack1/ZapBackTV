@@ -257,7 +257,7 @@ private fun Shell(vm: AppViewModel, screen: Screen, holder: SaveableStateHolder)
 private fun ScreenContent(vm: AppViewModel, screen: Screen, holder: SaveableStateHolder) {
     val state by vm.repo.state.collectAsStateWithLifecycle()
     val lib by vm.library.collectAsStateWithLifecycle()
-    val needsLibrary = screen !is Screen.Settings
+    val needsLibrary = screen !is Screen.Settings && screen !is Screen.History
     if (needsLibrary && lib == null) {
         when (val s = state) {
             is LibState.Error -> EmptyState(
@@ -294,6 +294,7 @@ private fun ScreenContent(vm: AppViewModel, screen: Screen, holder: SaveableStat
                 Screen.Search -> SearchScreen(vm)
                 Screen.Favorites -> FavoritesScreen(vm)
                 Screen.Settings -> SettingsScreen(vm)
+                is Screen.History -> com.lumen.tv.ui.screens.HistoryScreen(vm, s.filter)
                 is Screen.MovieDetail -> MovieDetailScreen(vm, s.movie)
                 is Screen.SeriesDetail -> SeriesDetailScreen(vm, s.series)
                 else -> Unit

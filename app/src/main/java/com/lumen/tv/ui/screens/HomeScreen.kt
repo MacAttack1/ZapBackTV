@@ -152,7 +152,7 @@ fun HomeScreen(vm: AppViewModel) {
 
         if (continueItems.isNotEmpty()) shelf(
             "continue", "Continue watching",
-            action = { Pill("Clear", selected = false, onClick = { confirmClear = ClearRow.CONTINUE }, icon = Icons.Rounded.DeleteSweep) },
+            action = { Pill("Edit", selected = false, onClick = { vm.navigate(Screen.History("resume")) }, icon = Icons.Rounded.DeleteSweep) },
         ) {
             items(continueItems, key = { it.key }) { e ->
                 WideCard(
@@ -171,7 +171,7 @@ fun HomeScreen(vm: AppViewModel) {
         }
         if (recentChannels.isNotEmpty()) shelf(
             "recentch", "Recently watched",
-            action = { Pill("Clear", selected = false, onClick = { confirmClear = ClearRow.RECENT }, icon = Icons.Rounded.DeleteSweep) },
+            action = { Pill("Edit", selected = false, onClick = { vm.navigate(Screen.History("live")) }, icon = Icons.Rounded.DeleteSweep) },
         ) {
             items(recentChannels, key = { it.listKey }) { c ->
                 ChannelTile(c, epg.now(c), width = if (isTv) 220.dp else 180.dp, recent = true, onLongClick = { vm.toggleFavorite(c) }) {

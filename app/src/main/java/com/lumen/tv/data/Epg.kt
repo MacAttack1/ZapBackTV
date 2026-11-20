@@ -19,7 +19,8 @@ class EpgData(
     val channelCount: Int get() = programmes.size
 
     fun forStream(s: Stream): List<Programme> {
-        s.epgId?.let { id -> programmes[id]?.let { return it } }
+        // Guide IDs are matched ignoring case: providers often write "ESPN.us" in one place and "espn.us" in the other.
+        s.epgId?.let { id -> programmes[id.lowercase(Locale.ROOT)]?.let { return it } }
         val byName = nameIndex[normalizeName(s.name)] ?: return emptyList()
         return programmes[byName].orEmpty()
     }
@@ -78,13 +79,17 @@ object EpgParser {
         shiftMs: Long = 0,
         now: Long = System.currentTimeMillis(),
     ): EpgData {
-        // Big guides (thousands of channels, a week of listings) can fill the whole app's memory,
-        // which crashes it wherever the next allocation happens. So the window shrinks as memory
-        // fills: 2 days back / 4 ahead, then 6 hours back / 1 day ahead, then stop adding.
-        var windowStart = now - 2 * 24 * 3600_000L
-        var windowEnd = now + 4 * 24 * 3600_000L
+        // Big guides (thousands of channels, a week of listings) can fill the app's memory, which
+        // crashes it wherever the next allocation happens. The guide gets a budget of half the memory
+        // that's free when it starts. As it fills: the window narrows, then descriptions are dropped.
+        // Every channel still gets its titles; listings are only cut off as a last resort.
+        var windowStart = now - 24 * 3600_000L
+        var windowEnd = now + 48 * 3600_000L
         var stage = 0
         var added = 0
+        System.gc()
+        val baseline = heapBytes()
+        val budget = (Runtime.getRuntime().maxMemory() - baseline) / 2
         // Titles and descriptions repeat a lot (reruns, "Paid Programming"), so share one copy.
         val strings = HashMap<String, String>()
         fun shared(v: String): String = strings.getOrPut(v) { v }
@@ -99,7 +104,7 @@ object EpgParser {
         parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
         parser.setInput(stream, null)
 
-        val keep = HashSet<String>(wantedIds)
+        val keep = wantedIds.mapTo(HashSet()) { it.lowercase(Locale.ROOT) }
         val nameIndex = HashMap<String, String>()
         val result = HashMap<String, ArrayList<Programme>>()
 
@@ -115,7 +120,7 @@ object EpgParser {
         while (event != XmlPullParser.END_DOCUMENT) {
             if (event == XmlPullParser.START_TAG) {
                 when (parser.name) {
-                    "channel" -> channelId = parser.getAttributeValue(null, "id")
+                    "channel" -> channelId = parser.getAttributeValue(null, "id")?.lowercase(Locale.ROOT)
                     "display-name" -> if (channelId != null && !inProgramme) {
                         val n = EpgData.normalizeName(safeText(parser))
                         if (n.isNotEmpty() && n in wantedNames) {
@@ -125,13 +130,13 @@ object EpgParser {
                     }
                     "programme" -> {
                         inProgramme = true
-                        progChannel = parser.getAttributeValue(null, "channel")
+                        progChannel = parser.getAttributeValue(null, "channel")?.lowercase(Locale.ROOT)
                         progStart = parseTime(parser.getAttributeValue(null, "start")) + shiftMs
                         progEnd = parseTime(parser.getAttributeValue(null, "stop")) + shiftMs
                         title = null; desc = null
                     }
                     "title" -> if (inProgramme && title == null) title = safeText(parser)
-                    "desc" -> if (inProgramme && desc == null) desc = safeText(parser).let { if (it.length > MAX_DESC) it.take(MAX_DESC - 1) + "…" else it }
+                    "desc" -> if (inProgramme && desc == null && stage < 2) desc = safeText(parser).let { if (it.length > MAX_DESC) it.take(MAX_DESC - 1) + "…" else it }
                 }
             } else if (event == XmlPullParser.END_TAG) {
                 when (parser.name) {
@@ -139,24 +144,27 @@ object EpgParser {
                     "programme" -> {
                         inProgramme = false
                         val ch = progChannel
-                        if (stage < 2 && ch != null && ch in keep && progStart > 0 &&
+                        if (stage < 3 && ch != null && ch in keep && progStart > 0 &&
                             progEnd > windowStart && progStart < windowEnd
                         ) {
                             val end = if (progEnd > progStart) progEnd else progStart + 30 * 60_000L
                             result.getOrPut(ch) { ArrayList() } +=
-                                Programme(progStart, end, shared(title ?: "No title"), desc?.takeIf { it.isNotEmpty() }?.let(::shared))
-                            if (++added % 4000 == 0) {
-                                var used = heapUsed()
+                                Programme(progStart, end, shared(title ?: "No title"), desc?.takeIf { it.isNotEmpty() && stage < 2 }?.let(::shared))
+                            if (++added % 5000 == 0) {
+                                var grown = heapBytes() - baseline
                                 // Parsing leaves garbage behind; only count what's really still in use.
-                                if (used > 0.45f) { System.gc(); used = heapUsed() }
-                                if (stage == 0 && used > 0.45f) {
-                                    stage = 1
+                                if (grown > budget * 0.4) { System.gc(); grown = heapBytes() - baseline }
+                                if (stage == 0 && grown > budget * 0.5) {
+                                    stage = 1 // 6 hours back, 1 day ahead
                                     windowStart = now - 6 * 3600_000L
                                     windowEnd = now + 24 * 3600_000L
                                     for (list in result.values) list.removeAll { it.end <= windowStart || it.start >= windowEnd }
+                                } else if (stage == 1 && grown > budget * 0.7) {
+                                    stage = 2 // no more descriptions, and drop the ones kept so far
+                                    for (list in result.values) list.replaceAll { if (it.desc != null) it.copy(desc = null) else it }
                                     strings.clear()
-                                } else if (stage == 1 && used > 0.6f) {
-                                    stage = 2
+                                } else if (stage == 2 && grown > budget) {
+                                    stage = 3 // out of room: stop adding
                                 }
                             }
                         }
@@ -171,10 +179,10 @@ object EpgParser {
 
     private const val MAX_DESC = 360
 
-    /** Share of the app's memory limit in use right now. */
-    private fun heapUsed(): Float {
+    /** Bytes of the app's memory in use right now. */
+    private fun heapBytes(): Long {
         val rt = Runtime.getRuntime()
-        return (rt.totalMemory() - rt.freeMemory()).toFloat() / rt.maxMemory()
+        return rt.totalMemory() - rt.freeMemory()
     }
 
     private fun safeText(p: XmlPullParser): String = runCatching { p.nextText().trim() }.getOrDefault("")

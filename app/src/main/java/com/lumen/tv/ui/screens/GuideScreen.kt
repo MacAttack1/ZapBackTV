@@ -251,8 +251,17 @@ private fun GuideRow(
     val isTv = LocalIsTv.current
     val span = viewEnd - viewStart
     // Render a margin either side so D-pad focus can always find a neighbour to move to.
-    val programmes = remember(epg, channel.key, viewStart / (15 * MIN)) {
+    val fromFile = remember(epg, channel.key, viewStart / (15 * MIN)) {
         epg.between(channel, viewStart - 4 * 3600_000L, viewEnd + 4 * 3600_000L)
+    }
+    // Nothing in the guide file for this channel: ask the provider for its schedule directly.
+    val listings by vm.repo.channelListings.collectAsStateWithLifecycle()
+    val fetched = listings[channel.key]
+    LaunchedEffect(channel.key, fromFile.isEmpty()) {
+        if (fromFile.isEmpty()) { delay(250); vm.repo.requestListings(channel) }
+    }
+    val programmes = if (fromFile.isNotEmpty() || fetched == null) fromFile else remember(fetched, viewStart / (15 * MIN)) {
+        fetched.filter { it.end > viewStart - 4 * 3600_000L && it.start < viewEnd + 4 * 3600_000L }
     }
     Row(Modifier.fillMaxWidth().height(rowHeight).padding(start = pad, end = pad, bottom = 4.dp)) {
         // Channel cell
@@ -285,7 +294,7 @@ private fun GuideRow(
                     .clickable { onOpened(); vm.playChannel(channel, channels) }
                     .padding(horizontal = 14.dp),
                 contentAlignment = Alignment.CenterStart,
-            ) { Text("No information", style = MaterialTheme.typography.bodyMedium, color = Hue.TextLo) }
+            ) { Text(if (fetched == null && vm.repo.current?.type == com.lumen.tv.data.SourceType.XTREAM) "Loading…" else "No information", style = MaterialTheme.typography.bodyMedium, color = Hue.TextLo) }
         } else {
             val firstLiveIndex = programmes.indexOfFirst { now in it.start until it.end }.let { if (it < 0) 0 else it }
             Layout(
