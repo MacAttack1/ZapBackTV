@@ -117,12 +117,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         list.firstOrNull { it.id == id } ?: list.firstOrNull()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    private val rules = store.settings.map {
-        ContentRules(
-            hidden = it.hiddenCategories, approvedForeign = it.approvedForeign,
-            countryOnly = it.countryOnly, preferred = it.preferredRegion, showAdult = it.showAdult,
-        )
-    }.distinctUntilChanged()
+    private val rules = store.settings.map { it.contentRules }.distinctUntilChanged()
 
     /**
      * The library every screen uses. Categories the user turned off, adult content and (optionally)
@@ -180,6 +175,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         lib?.let { Catalog.classify(it.categories(Kind.LIVE), pref) } ?: emptyList()
     }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    init {
+        // The guide only keeps listings for channels you can see, so re-read it (from the saved
+        // file, no download) when that changes.
+        viewModelScope.launch { rules.drop(1).collect { repo.refreshEpg(force = false) } }
+    }
+
     fun checkPin(pin: String): Boolean = pin == store.settings.value.pin
 
     init {
@@ -190,9 +191,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         viewModelScope.launch {
-            store.settings.map { it.liveFormat to it.epgShiftHours }.distinctUntilChanged().drop(1).collect {
+            // Stream format is part of every channel's address, so the library is rebuilt (from the
+            // saved files, no download). Time shift only affects the guide.
+            store.settings.map { it.liveFormat }.distinctUntilChanged().drop(1).collect {
                 activeSource.value?.let { s -> if (repo.current?.id == s.id) repo.load(s) }
             }
+        }
+        viewModelScope.launch {
+            store.settings.map { it.epgShiftHours }.distinctUntilChanged().drop(1).collect { repo.refreshEpg(force = false) }
+        }
+        viewModelScope.launch {
+            repo.notice.collect { msg -> if (msg != null) { toast = msg; repo.noticeShown() } }
         }
     }
 

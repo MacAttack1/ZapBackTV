@@ -35,6 +35,12 @@ data class Settings(
 ) {
     val setupDone: Boolean get() = setupVersion >= SETUP_VERSION
 
+    /** What's filtered out of the library (hidden categories, adult, other countries). */
+    val contentRules: ContentRules get() = ContentRules(
+        hidden = hiddenCategories, approvedForeign = approvedForeign,
+        countryOnly = countryOnly, preferred = preferredRegion, showAdult = showAdult,
+    )
+
     fun toJson() = JSONObject().apply {
         put("liveFormat", liveFormat); put("bufferSeconds", bufferSeconds); put("autoplayNext", autoplayNext)
         put("aspect", aspect); put("theme", theme); put("background", background); put("backgroundDim", backgroundDim); put("backgroundBlur", backgroundBlur); put("epgShiftHours", epgShiftHours)

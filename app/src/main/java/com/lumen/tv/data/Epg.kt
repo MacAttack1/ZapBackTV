@@ -12,6 +12,8 @@ import java.util.zip.GZIPInputStream
 class EpgData(
     private val programmes: Map<String, List<Programme>>,
     private val nameIndex: Map<String, String>,
+    /** True when the guide was shortened (fewer days) so it would fit in this device's memory. */
+    val trimmed: Boolean = false,
 ) {
     val isEmpty: Boolean get() = programmes.isEmpty()
     val channelCount: Int get() = programmes.size
@@ -76,8 +78,16 @@ object EpgParser {
         shiftMs: Long = 0,
         now: Long = System.currentTimeMillis(),
     ): EpgData {
-        val windowStart = now - 2 * 24 * 3600_000L
-        val windowEnd = now + 4 * 24 * 3600_000L
+        // Big guides (thousands of channels, a week of listings) can fill the whole app's memory,
+        // which crashes it wherever the next allocation happens. So the window shrinks as memory
+        // fills: 2 days back / 4 ahead, then 6 hours back / 1 day ahead, then stop adding.
+        var windowStart = now - 2 * 24 * 3600_000L
+        var windowEnd = now + 4 * 24 * 3600_000L
+        var stage = 0
+        var added = 0
+        // Titles and descriptions repeat a lot (reruns, "Paid Programming"), so share one copy.
+        val strings = HashMap<String, String>()
+        fun shared(v: String): String = strings.getOrPut(v) { v }
 
         val buffered = BufferedInputStream(input, 64 * 1024)
         buffered.mark(4)
@@ -121,7 +131,7 @@ object EpgParser {
                         title = null; desc = null
                     }
                     "title" -> if (inProgramme && title == null) title = safeText(parser)
-                    "desc" -> if (inProgramme && desc == null) desc = safeText(parser)
+                    "desc" -> if (inProgramme && desc == null) desc = safeText(parser).let { if (it.length > MAX_DESC) it.take(MAX_DESC - 1) + "…" else it }
                 }
             } else if (event == XmlPullParser.END_TAG) {
                 when (parser.name) {
@@ -129,19 +139,42 @@ object EpgParser {
                     "programme" -> {
                         inProgramme = false
                         val ch = progChannel
-                        if (ch != null && ch in keep && progStart > 0 &&
+                        if (stage < 2 && ch != null && ch in keep && progStart > 0 &&
                             progEnd > windowStart && progStart < windowEnd
                         ) {
                             val end = if (progEnd > progStart) progEnd else progStart + 30 * 60_000L
-                            result.getOrPut(ch) { ArrayList() } += Programme(progStart, end, title ?: "No title", desc)
+                            result.getOrPut(ch) { ArrayList() } +=
+                                Programme(progStart, end, shared(title ?: "No title"), desc?.takeIf { it.isNotEmpty() }?.let(::shared))
+                            if (++added % 4000 == 0) {
+                                var used = heapUsed()
+                                // Parsing leaves garbage behind; only count what's really still in use.
+                                if (used > 0.45f) { System.gc(); used = heapUsed() }
+                                if (stage == 0 && used > 0.45f) {
+                                    stage = 1
+                                    windowStart = now - 6 * 3600_000L
+                                    windowEnd = now + 24 * 3600_000L
+                                    for (list in result.values) list.removeAll { it.end <= windowStart || it.start >= windowEnd }
+                                    strings.clear()
+                                } else if (stage == 1 && used > 0.6f) {
+                                    stage = 2
+                                }
+                            }
                         }
                     }
                 }
             }
             event = parser.next()
         }
-        result.values.forEach { it.sortBy { p -> p.start } }
-        return EpgData(result, nameIndex)
+        result.values.forEach { it.sortBy { p -> p.start }; it.trimToSize() }
+        return EpgData(result, nameIndex, trimmed = stage > 0)
+    }
+
+    private const val MAX_DESC = 360
+
+    /** Share of the app's memory limit in use right now. */
+    private fun heapUsed(): Float {
+        val rt = Runtime.getRuntime()
+        return (rt.totalMemory() - rt.freeMemory()).toFloat() / rt.maxMemory()
     }
 
     private fun safeText(p: XmlPullParser): String = runCatching { p.nextText().trim() }.getOrDefault("")

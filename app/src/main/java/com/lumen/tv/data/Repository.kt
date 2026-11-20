@@ -19,6 +19,11 @@ import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 
 class Repository(private val context: Context, private val store: Store) {
+    companion object {
+        /** How often the provider is asked for a new copy of the playlist. */
+        const val CHECK_HOURS = 12
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val _state = MutableStateFlow<LibState>(LibState.Idle)
@@ -46,6 +51,23 @@ class Repository(private val context: Context, private val store: Store) {
         _state.value = LibState.Idle; _epg.value = EpgData.EMPTY; _account.value = null
     }
 
+    /** A short message for the user after a background check (e.g. "Playlist updated"). */
+    private val _notice = MutableStateFlow<String?>(null)
+    val notice: StateFlow<String?> = _notice
+    fun noticeShown() { _notice.value = null }
+
+    /** True while a background check for playlist changes is running. */
+    private val _syncing = MutableStateFlow(false)
+    val syncing: StateFlow<Boolean> = _syncing
+
+    /** Background checks don't show the full loading screen. */
+    @Volatile private var quiet = false
+
+    /**
+     * Opens [source]'s library. The organized library saved last time opens right away; the
+     * provider is only asked for a new copy when it's over [CHECK_HOURS] old (or [force], from the
+     * Refresh button), and the list is only rebuilt when what comes back is actually different.
+     */
     fun load(source: Source, force: Boolean = false) {
         loadJob?.cancel(); epgJob?.cancel()
         if (current?.id != source.id) {
@@ -54,36 +76,125 @@ class Repository(private val context: Context, private val store: Store) {
         }
         current = source
         loadJob = scope.launch {
-            val previous = (_state.value as? LibState.Ready)?.library?.takeIf { it.sourceId == source.id }
-            if (previous == null) _state.value = LibState.Loading("Connecting to ${source.name}…")
+            val d = dir(source)
+            val snapFile = File(d, "library.bin")
+            val config = configKey(source)
+            var shown = (_state.value as? LibState.Ready)?.library?.takeIf { it.sourceId == source.id }
+            var shownFp: String? = null
+
+            // 1. The saved library, instantly.
+            if (shown == null) {
+                val saved = runCatching { Snapshot.read(snapFile, config) }.getOrNull()
+                if (saved != null) {
+                    shown = saved.library
+                    shownFp = saved.fingerprint
+                    _state.value = LibState.Ready(saved.library)
+                    _progress.value = null
+                    startEpg(source, saved.library)
+                }
+            } else {
+                // Already on screen: only the saved copy's fingerprint is needed.
+                shownFp = Snapshot.readFingerprint(snapFile, config)
+            }
+            if (source.type == SourceType.XTREAM) refreshAccount(source, force)
+
+            val inputs = inputFiles(source)
+            val fpFile = File(d, "inputs.fp")
+            val due = force || !fpFile.exists() || System.currentTimeMillis() - fpFile.lastModified() > CHECK_HOURS * 3600_000L
+            if (shown != null && shownFp != null && !due) return@launch // up to date, nothing to do
+
+            // 2. Fetch new copies (quietly when a library is already on screen) and compare.
+            // Automatic checks are invisible; the Refresh button still shows the slim progress bar.
+            quiet = shown != null && !force
+            _syncing.value = shown != null
             try {
+                if (due || inputs.any { !it.exists() }) {
+                    when (source.type) {
+                        SourceType.XTREAM -> downloadXtream(source, force = due)
+                        SourceType.M3U_URL, SourceType.M3U_FILE -> downloadM3u(source)
+                    }
+                }
+                val fp = Snapshot.fingerprint(inputs)
+                fpFile.writeText(fp); fpFile.setLastModified(System.currentTimeMillis())
+                if (shown != null && fp == shownFp) {
+                    if (force) _notice.value = "${source.name} is up to date"
+                    return@launch
+                }
+
+                // 3. Something changed (or nothing was saved yet): rebuild the library.
                 val lib = when (source.type) {
-                    SourceType.XTREAM -> loadXtream(source, force)
-                    SourceType.M3U_URL, SourceType.M3U_FILE -> loadM3u(source, force)
+                    SourceType.XTREAM -> parseXtream(source)
+                    SourceType.M3U_URL, SourceType.M3U_FILE -> parseM3u(source)
                 }
                 if (lib.isEmpty) throw IOException("This playlist doesn't contain any channels or videos.")
+                val before = shown
                 _state.value = LibState.Ready(lib)
                 _progress.value = null
-                loadEpg(source, lib, force)
+                runCatching { Snapshot.write(snapFile, lib, fp, config) }
+                // Only announce real content changes (not a rebuild after a setting changed).
+                if (before != null && shownFp != null) _notice.value = changeSummary(source, before, lib)
+                startEpg(source, lib)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: OutOfMemoryError) {
                 System.gc()
                 failRunning()
-                if (previous == null) _state.value = LibState.Error("This playlist is too large for this device's memory.")
+                if (shown == null) _state.value = LibState.Error("This playlist is too large for this device's memory.")
             } catch (e: Throwable) {
-                // Never let a bad playlist take the whole app down.
+                // Never let a bad playlist take the whole app down; a library on screen stays.
                 failRunning()
-                if (previous == null) _state.value = LibState.Error(friendly(e)) else _progress.value = null
+                if (shown == null) _state.value = LibState.Error(friendly(e))
+                else { _progress.value = null; if (force) _notice.value = "Couldn't check ${source.name}: ${friendly(e)}" }
+            } finally {
+                _syncing.value = false
+                quiet = false
             }
         }
     }
 
-    fun refreshEpg() {
+    private fun startEpg(source: Source, lib: Library) {
+        epgJob?.cancel()
+        epgJob = scope.launch { loadEpg(source, lib, force = false) }
+    }
+
+    private fun refreshAccount(source: Source, force: Boolean) {
+        scope.launch {
+            runCatching {
+                val client = XtreamClient(source)
+                _account.value = client.parseAccount(cached(File(dir(source), "account.json"), force, ttlHours = 1) { client.accountRaw() })
+            }
+        }
+    }
+
+    /** Settings that change how the library is built; a different value means rebuilding it. */
+    private fun configKey(source: Source) =
+        "${source.type}|${source.url}|${source.username}|${store.settings.value.liveFormat}"
+
+    private fun inputFiles(source: Source): List<File> {
+        val d = dir(source)
+        return when (source.type) {
+            SourceType.XTREAM -> listOf("live_cats.json", "vod_cats.json", "series_cats.json", "live.json", "vod.json", "series.json").map { File(d, it) }
+            else -> listOf(File(d, "playlist.m3u"))
+        }
+    }
+
+    private fun changeSummary(source: Source, old: Library, new: Library): String {
+        val parts = listOf(Kind.LIVE to "channels", Kind.MOVIE to "movies", Kind.SERIES to "series").mapNotNull { (k, noun) ->
+            val diff = new.streams(k).size - old.streams(k).size
+            when {
+                diff > 0 -> "$diff new $noun"
+                diff < 0 -> "${-diff} fewer $noun"
+                else -> null
+            }
+        }
+        return "${source.name} updated" + if (parts.isEmpty()) "" else ": " + parts.joinToString(", ")
+    }
+
+    fun refreshEpg(force: Boolean = true) {
         val s = current ?: return
         val lib = (_state.value as? LibState.Ready)?.library ?: return
         epgJob?.cancel()
-        epgJob = scope.launch { loadEpg(s, lib, force = true) }
+        epgJob = scope.launch { loadEpg(s, lib, force = force) }
     }
 
     // ------------------------------------------------------------------ progress
@@ -96,10 +207,12 @@ class Repository(private val context: Context, private val store: Store) {
     val epgProgress: StateFlow<Float?> = _epgProgress
 
     private fun startProgress(title: String, vararg steps: Pair<String, String>) {
+        if (quiet) return
         _progress.value = LoadProgress(title, steps.map { (id, label) -> LoadStep(id, label) })
     }
 
     private fun step(id: String, transform: (LoadStep) -> LoadStep) {
+        if (quiet) return
         _progress.update { p -> p?.copy(steps = p.steps.map { if (it.id == id) transform(it) else it }) }
     }
 
@@ -130,57 +243,66 @@ class Repository(private val context: Context, private val store: Store) {
 
     // ------------------------------------------------------------------ Xtream
 
-    private suspend fun loadXtream(source: Source, force: Boolean): Library = coroutineScope {
+    private suspend fun downloadXtream(source: Source, force: Boolean) = coroutineScope {
+        val client = XtreamClient(source)
+        val d = dir(source)
+        val ua = source.userAgent.ifBlank { null }
+        startProgress(
+            "Loading ${source.name}",
+            "live" to "Live channels", "movies" to "Movies", "series" to "Series", "organize" to "Organizing your library",
+        )
+        status("Loading channels, movies and series…")
+        val jobs = listOf(
+            async { cached(File(d, "live_cats.json"), force) { client.raw("get_live_categories") } },
+            async { runCatching { cached(File(d, "vod_cats.json"), force) { client.raw("get_vod_categories") } } },
+            async { runCatching { cached(File(d, "series_cats.json"), force) { client.raw("get_series_categories") } } },
+            // Big catalogs go straight to disk, never held in memory as one giant string.
+            async {
+                running("live", "Connecting…")
+                cachedFile(File(d, "live.json"), force) { Http.download(client.apiUrl("get_live_streams"), ua, it, downloading("live")) }
+            },
+            async {
+                running("movies", "Connecting…")
+                runCatching { cachedFile(File(d, "vod.json"), force) { Http.download(client.apiUrl("get_vod_streams"), ua, it, downloading("movies")) } }
+            },
+            async {
+                running("series", "Connecting…")
+                runCatching { cachedFile(File(d, "series.json"), force) { Http.download(client.apiUrl("get_series"), ua, it, downloading("series")) } }
+            },
+        )
+        jobs.forEach { it.await() }
+    }
+
+    private suspend fun parseXtream(source: Source): Library = coroutineScope {
         val client = XtreamClient(source)
         val d = dir(source)
         val format = store.settings.value.liveFormat
-        val ua = source.userAgent.ifBlank { null }
-
-        startProgress(
+        if (_progress.value == null) startProgress(
             "Loading ${source.name}",
-            "account" to "Signing in", "live" to "Live channels", "movies" to "Movies",
-            "series" to "Series", "organize" to "Organizing your library",
+            "live" to "Live channels", "movies" to "Movies", "series" to "Series", "organize" to "Organizing your library",
         )
-        status("Signing in…")
-        running("account")
-        val accountJson = cached(File(d, "account.json"), force, ttlHours = 1) { client.accountRaw() }
-        _account.value = client.parseAccount(accountJson)
-        done("account", _account.value?.status)
-
-        status("Loading channels, movies and series…")
-        val liveCats = async { cached(File(d, "live_cats.json"), force) { client.raw("get_live_categories") } }
-        val vodCats = async { runCatching { cached(File(d, "vod_cats.json"), force) { client.raw("get_vod_categories") } }.getOrDefault("[]") }
-        val seriesCats = async { runCatching { cached(File(d, "series_cats.json"), force) { client.raw("get_series_categories") } }.getOrDefault("[]") }
-
-        // Big catalogs are downloaded straight to disk and parsed as a stream,
-        // never held in memory as one giant string. Each one reports its own progress.
+        status("Reading channels, movies and series…")
+        fun text(name: String) = File(d, name).takeIf { it.exists() }?.readText() ?: "[]"
         val live = async {
-            running("live", "Connecting…")
-            val f = cachedFile(File(d, "live.json"), force) { Http.download(client.apiUrl("get_live_streams"), ua, it, downloading("live")) }
+            val f = File(d, "live.json")
+            if (!f.exists()) throw IOException("Couldn't download the channel list.")
             client.parseLive(f, format, parsing("live", "channels")).also { done("live", count(it.size, "channels")) }
         }
         val vod = async {
-            running("movies", "Connecting…")
-            runCatching {
-                val f = cachedFile(File(d, "vod.json"), force) { Http.download(client.apiUrl("get_vod_streams"), ua, it, downloading("movies")) }
-                client.parseVod(f, parsing("movies", "movies"))
-            }.getOrElse { emptyList() }.also { done("movies", count(it.size, "movies")) }
+            runCatching { File(d, "vod.json").takeIf { it.exists() }?.let { client.parseVod(it, parsing("movies", "movies")) } }
+                .getOrNull().orEmpty().also { done("movies", count(it.size, "movies")) }
         }
         val series = async {
-            running("series", "Connecting…")
-            runCatching {
-                val f = cachedFile(File(d, "series.json"), force) { Http.download(client.apiUrl("get_series"), ua, it, downloading("series")) }
-                client.parseSeries(f, parsing("series", "series"))
-            }.getOrElse { emptyList() }.also { done("series", count(it.size, "series")) }
+            runCatching { File(d, "series.json").takeIf { it.exists() }?.let { client.parseSeries(it, parsing("series", "series")) } }
+                .getOrNull().orEmpty().also { done("series", count(it.size, "series")) }
         }
-
         val streams = mapOf(Kind.LIVE to live.await(), Kind.MOVIE to vod.await(), Kind.SERIES to series.await())
         status("Organizing your library…")
         running("organize")
         val cats = mapOf(
-            Kind.LIVE to client.parseCategories(liveCats.await(), Kind.LIVE),
-            Kind.MOVIE to client.parseCategories(vodCats.await(), Kind.MOVIE),
-            Kind.SERIES to client.parseCategories(seriesCats.await(), Kind.SERIES),
+            Kind.LIVE to client.parseCategories(text("live_cats.json"), Kind.LIVE),
+            Kind.MOVIE to runCatching { client.parseCategories(text("vod_cats.json"), Kind.MOVIE) }.getOrDefault(emptyList()),
+            Kind.SERIES to runCatching { client.parseCategories(text("series_cats.json"), Kind.SERIES) }.getOrDefault(emptyList()),
         )
         val lib = Library(
             sourceId = source.id,
@@ -205,25 +327,33 @@ class Repository(private val context: Context, private val store: Store) {
 
     // ------------------------------------------------------------------ M3U
 
-    private fun loadM3u(source: Source, force: Boolean): Library {
+    private fun downloadM3u(source: Source) {
         startProgress("Loading ${source.name}", "download" to "Playlist", "read" to "Channels & videos", "organize" to "Organizing your library")
         val file = File(dir(source), "playlist.m3u")
-        val fresh = file.exists() && System.currentTimeMillis() - file.lastModified() < 12 * 3600_000L
-        if (force || !fresh) {
-            status(if (file.exists()) "Refreshing playlist…" else "Downloading playlist…")
-            running("download", "Connecting…")
-            try {
-                when (source.type) {
-                    SourceType.M3U_URL -> Http.download(source.url, source.userAgent.ifBlank { null }, file) { read, total ->
-                        running("download", if (total > 0) "${formatBytes(read)} of ${formatBytes(total)}" else formatBytes(read),
-                            if (total > 0) read.toFloat() / total else null)
-                    }
-                    else -> copyUri(Uri.parse(source.url), file)
+        status(if (file.exists()) "Refreshing playlist…" else "Downloading playlist…")
+        running("download", "Connecting…")
+        // Download beside the old copy, so a failed download never leaves half a playlist.
+        val part = File(file.path + ".part")
+        try {
+            when (source.type) {
+                SourceType.M3U_URL -> Http.download(source.url, source.userAgent.ifBlank { null }, part) { read, total ->
+                    running("download", if (total > 0) "${formatBytes(read)} of ${formatBytes(total)}" else formatBytes(read),
+                        if (total > 0) read.toFloat() / total else null)
                 }
-            } catch (e: Exception) {
-                if (!file.exists()) throw e
+                else -> copyUri(Uri.parse(source.url), part)
             }
+            if (part.length() > 0) { file.delete(); part.renameTo(file) }
+        } catch (e: Exception) {
+            part.delete()
+            if (!file.exists()) throw e
         }
+        done("download", formatBytes(file.length()))
+    }
+
+    private fun parseM3u(source: Source): Library {
+        val file = File(dir(source), "playlist.m3u")
+        if (!file.exists()) throw IOException("The playlist hasn't been downloaded yet.")
+        if (_progress.value == null) startProgress("Loading ${source.name}", "download" to "Playlist", "read" to "Channels & videos", "organize" to "Organizing your library")
         done("download", formatBytes(file.length()))
         status("Reading playlist…")
         running("read", "Reading… 0%")
@@ -253,8 +383,10 @@ class Repository(private val context: Context, private val store: Store) {
     private suspend fun loadEpg(source: Source, lib: Library, force: Boolean) {
         val url = source.epgUrl.ifBlank { lib.epgUrl ?: "" }
         if (url.isBlank()) { _epgStatus.value = null; return }
-        val live = lib.streams(Kind.LIVE)
-        if (live.isEmpty()) return
+        // Only channels that are actually shown (not hidden categories or other countries):
+        // a guide for every channel in a big playlist won't fit in a TV box's memory.
+        val live = Catalog.applyRules(lib, store.settings.value.contentRules).streams(Kind.LIVE)
+        if (live.isEmpty()) { _epg.value = EpgData.EMPTY; return }
         try {
             val file = File(dir(source), "epg.xml")
             val stale = !file.exists() || System.currentTimeMillis() - file.lastModified() > 12 * 3600_000L
@@ -272,6 +404,8 @@ class Repository(private val context: Context, private val store: Store) {
             }
             _epgStatus.value = "Reading TV guide…"
             _epgProgress.value = 0.5f
+            // Let go of the old guide first, so two copies are never in memory at once.
+            _epg.value = EpgData.EMPTY
             val ids = live.mapNotNullTo(HashSet()) { it.epgId }
             val names = live.mapTo(HashSet()) { EpgData.normalizeName(it.name) }
             val shift = store.settings.value.epgShiftHours * 3600_000L
@@ -351,6 +485,7 @@ class Repository(private val context: Context, private val store: Store) {
     // ------------------------------------------------------------------ util
 
     private fun status(msg: String) {
+        if (quiet) return
         if (_state.value !is LibState.Ready) _state.value = LibState.Loading(msg)
     }
 
@@ -358,7 +493,7 @@ class Repository(private val context: Context, private val store: Store) {
         val fresh = file.exists() && System.currentTimeMillis() - file.lastModified() < ttlHours * 3600_000L
         if (!force && fresh) return file.readText()
         return try {
-            fetch().also { file.writeText(it) }
+            fetch().also { if (!file.exists() || file.readText() != it) file.writeText(it) else file.setLastModified(System.currentTimeMillis()) }
         } catch (e: Exception) {
             if (file.exists()) file.readText() else throw e
         }
@@ -368,7 +503,8 @@ class Repository(private val context: Context, private val store: Store) {
         val fresh = file.exists() && System.currentTimeMillis() - file.lastModified() < ttlHours * 3600_000L
         if (!force && fresh) return file
         return try {
-            fetch(file); file
+            fetch(file) // Http.download writes beside the old copy and swaps it in only when complete
+            file
         } catch (e: Exception) {
             if (file.exists()) file else throw e
         }

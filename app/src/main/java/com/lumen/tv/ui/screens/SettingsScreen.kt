@@ -654,7 +654,7 @@ private fun GuidePage(vm: AppViewModel) {
     val epgStatus by vm.repo.epgStatus.collectAsStateWithLifecycle()
 
     Group("Listings") {
-        InfoLine("Status", epgStatus ?: if (epg.isEmpty) "No guide loaded" else "${epg.channelCount} channels with listings")
+        InfoLine("Status", epgStatus ?: if (epg.isEmpty) "No guide loaded" else "${epg.channelCount} channels with listings" + if (epg.trimmed) " (shortened to fit memory)" else "")
         ActionRow("Refresh guide now", Icons.Rounded.Refresh) { vm.repo.refreshEpg(); vm.toast = "Refreshing guide…" }
     }
     Group("Display") {

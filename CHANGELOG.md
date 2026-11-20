@@ -2,6 +2,19 @@
 
 Each `## version` section becomes the release notes on GitHub and the "What's new" text in the app's update dialog.
 
+## 2.3.2
+
+- **Opens straight into your library**: the organized channel, movie and series list is saved, so the app no longer re-reads your whole playlist every time it starts
+- Checks your provider for changes quietly in the background, at most every 12 hours (or when you press Refresh), and only rebuilds the list when something actually changed
+- A short message tells you when a playlist was updated (for example "120 new movies"), or that it's already up to date after a manual refresh
+- Changing the guide time shift no longer reloads the whole playlist
+
+## 2.3.1
+
+- Fixed a crash ("out of memory") on TV boxes while the TV guide loaded with large playlists
+- The TV guide now only keeps listings for channels you can see (not hidden categories or other countries), so it loads faster and uses far less memory
+- If a guide is still too big for the device, it's shortened to the next day instead of crashing (Settings › TV guide says so)
+
 ## 2.3.0
 
 - **10 vibrant themes** that color the whole app, not just the buttons: ZapBack, Neon Arcade, Electric, Ocean Pop, Toxic, Lava, Sunset Pop, Grape Soda, Bubblegum, and Midnight (the old dark look). Bold flat colors instead of muted gradients, and switching applies instantly
